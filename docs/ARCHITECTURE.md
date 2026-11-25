@@ -24,10 +24,9 @@ flowchart LR
     R -.-> W
     W --> G[Artefacts<br/>LLM: stories, use cases, workflows, data, interfaces<br/>code: RTM, control matrix, registers, open issues]
     G --> S[SRS<br/>Markdown + print-friendly HTML]
-    C -. shown as Stage 2 in the UI .-> F
 ```
 
-In the UI the stages run as three separate calls: `/agents/requirements`, `/agents/compliance`, `/agents/sdlc`. The interview (`/agents/interview`, `/agents/interview/templates`) and quality check (`/agents/quality`) are API-only for now. `/agents/pipeline` runs requirements -> compliance (+ mapping) -> quality -> risk register -> SDLC -> workflow -> artefacts in one request (8 LLM calls; 9 with more than 20 requirements) and returns all of them, with `compliance_mapping`, `risk_register`, `sdlc_workflow`, `artefacts` and `srs` (download links) as top-level keys; it accepts the same optional interview `answers` as `/agents/requirements`.
+The web UI makes one `/agents/pipeline` request and renders every stage from its result; its interview step uses `/agents/interview/templates` and `/agents/interview`. The single-stage endpoints (`/agents/requirements`, `/agents/compliance`, `/agents/quality`, `/agents/sdlc`) remain for API clients. `/agents/pipeline` runs requirements -> compliance (+ mapping) -> quality -> risk register -> SDLC -> workflow -> artefacts in one request (8 LLM calls; 9 with more than 20 requirements) and returns all of them, with `compliance_mapping`, `risk_register`, `sdlc_workflow`, `artefacts` and `srs` (download links) as top-level keys; it accepts the same optional interview `answers` as `/agents/requirements`.
 
 Note: the compliance result is displayed to the user but is not currently fed into the SDLC trait extraction. Both agents work from the same requirement list. Feeding compliance findings into criticality/verification scoring is a possible future improvement.
 
@@ -60,7 +59,7 @@ Note: the compliance result is displayed to the user but is not currently fed in
 | Workflow generator | `app/agents/sdlc_workflows.py`, `workflow_agent.py` | Base phases per model (plain data, section 15 fields); one LLM call adds scenario-specific items |
 | RAG | `app/rag/` | Gemini embeddings, ChromaDB ingestion and retrieval |
 | Gemini client | `app/gemini_client.py` | Single place for model calls: backoff on 429, up to 4 attempts on 503 (2, 4, 8 s waits, at most 15 s), fallback across models on 404/empty; when every model fails the error lists each attempt; records which model answered (reported as `meta.model`) |
-| API + UI | `app/main.py`, `app/static/` | FastAPI routes; single-page dashboard |
+| API + UI | `app/main.py`, `app/static/` | FastAPI routes; single-page UI in vanilla HTML/CSS/JS, SVG charts in `charts.js` |
 
 ## Class diagram (logical)
 
@@ -173,15 +172,39 @@ The SRS (`app/srs.py`) is assembled by code from the pipeline result, with no LL
 
 Endpoints: `GET /agents/srs/{id}?format=markdown|html` serves the SRS of a stored pipeline run with its current approval state (stored in SQLite, so it survives a restart; the pipeline response gives the links); `POST /agents/srs?format=markdown|html` builds it from a saved pipeline result sent in the body, with a 400 if the body is not one.
 
+## Web UI (Phase 7)
+
+`app/static/index.html`, `style.css`, `app.js` and `charts.js`: vanilla HTML, CSS and JavaScript, no framework, no build step, no charting library. Fonts are Poppins and Plus Jakarta Sans from Google Fonts with system fallbacks, so the page works offline. Colours: black containers (`#000000`, `#0B0B0D`, `#151518`, lines `#26262B`), text `#F2F2F5` / `#9A9AA4`, violet `#B26CFF` / `#C79CFF` as accent only, and a five-step heat scale (`#1F1F26` to `#9333EA`) for matrices. A print stylesheet hides the controls.
+
+| Part | What it does |
+|---|---|
+| Top bar | Role dropdown (stored in `localStorage`, sent as `X-Role` on every request), "New analysis" |
+| Sidebar | The six stages with a status dot and a one-line summary computed from the result; run id and versions |
+| Scenario | Scenario text, interview answers (templates or LLM follow-ups), document upload read with `FileReader` (extension, size and count checked before sending, and again by the server), run button with elapsed timer, pipeline diagram (dashed = LLM step, solid = code step) |
+| Requirements | Record table with categories, risk and confidence badges, quote and document name, quality flags, approval status and version, review buttons |
+| Compliance and risk | Mapping per requirement with scope label, jurisdiction, version, status, verified evidence, confidence, review flags; retrieved chunks; risk register sorted by score with a 5x5 grid |
+| SDLC | Model name and percentage, close-call banner, justification, radar (15 traits vs the winner's profile), ranked bars, why-not list, trait-by-model heat matrix, trait evidence, the four approvers, workflow table |
+| Artefacts | Sub-tabs for every artefact type; SRS download and printable view |
+| Approvals | Baseline state, blockers, all items with history, decisions, freeze button |
+| Audit log | Shown to auditor and compliance officer only; filters and the chain check |
+
+**Data flow.** One `fetch` wrapper adds `X-Role` and turns error responses into plain messages (400, 403, 404, 409 with its blocker list, 422, 502); a render error in one view shows a message instead of a blank page. After a pipeline run the UI loads `GET /runs/<id>` for the approval items; after every review action it reloads `GET /runs/<id>/result` and `GET /runs/<id>`, so statuses and versions always come from the server. The traceability matrix's status column uses the current item status (the stored matrix keeps the status at generation time). The run id is kept in the URL hash (`#run=<id>`) so a reload reopens the stored run. The SRS buttons fetch `GET /agents/srs/<id>` with the role header and open or save the reply as a Blob (a plain link could not send the header); in sample mode, or if the run is gone, they `POST /agents/srs` with the result instead.
+
+**No per-stage progress.** The risk register, workflow, artefacts and run storage exist only inside `/agents/pipeline`, so the UI cannot show real progress without backend changes (a streaming or polling endpoint). It shows a running state and the elapsed time instead of fake stage progress.
+
+**Recorded sample.** `app/static/sample_run.json` is a pipeline result produced offline by `scripts/make_sample_run.py`: the real `/agents/pipeline` code with mocked model replies (from the test fixtures) and real knowledge-base paragraphs as retrieved chunks. It is labelled "Recorded sample, not a live run"; its scenario's email and card number are masked like any input, and a test checks that it contains no API key or unmasked personal data. It should be replaced with a recorded live run for the demo.
+
+Trait display names and the lists of models, roles and upload limits are repeated in `app.js` (the API returns trait keys only); `tests/test_ui.py` fails if they drift from the backend.
+
 ## Persistence, roles, approvals and audit (problem statement sections 16, 17, 20)
 
 **Storage.** `data/app.db` (SQLite, standard library, gitignored, created on startup or first use; `REQUORA_DB_PATH` overrides the location and the tests use a temporary file). Tables: `runs` (the full pipeline result as generated, never edited; app and KB version; baseline state), `approval_items` (every version of every approvable item), `decisions` (every approval action) and `audit_events`. Database triggers abort any UPDATE or DELETE on `decisions` and `audit_events`. `/agents/pipeline` stores each successful run and returns its `run_id`; the SRS links use it.
 
-**Roles.** The caller's role comes from the `X-Role` header: business analyst, product owner, security officer, compliance officer, project manager, architect, auditor. This is a stand-in, not authentication: anyone can send any header. With `REQUIRE_ROLE=1` every API request without the header gets 400 (health and the UI page excepted); by default it is off because the UI does not send roles yet. The permission table in `app/roles.py` is still enforced on every call:
+**Roles.** The caller's role comes from the `X-Role` header: business analyst, product owner, security officer, compliance officer, project manager, architect, auditor. This is a stand-in, not authentication: anyone can send any header. With `REQUIRE_ROLE=1` every API request without the header gets 400 (health and the UI page excepted); the UI sends the role chosen in its top bar on every request; by default the check is off so plain API clients keep working. The permission table in `app/roles.py` is still enforced on every call:
 
 | Action | Allowed roles | Section 16 item |
 |---|---|---|
-| Run a stage or the pipeline | all except auditor (no header: allowed, logged as "unspecified", so the current UI keeps working) | - |
+| Run a stage or the pipeline | all except auditor (no header: allowed, logged as "unspecified", for plain API clients) | - |
 | Review a requirement | business analyst, product owner | requirement approval |
 | Review a high-risk security requirement (category Security, risk level High) | security officer | high-risk security requirements |
 | Review a compliance interpretation | compliance officer | regulatory interpretations |
@@ -225,7 +248,7 @@ The auditor role is read-only: every POST except building an SRS from a supplied
 5. `kb_relevance` is computed, not generated, and only **domain-specific** sources that **apply to the domain** count: no requirement matched a domain-specific chunk = `not_relevant`; at least half did = `relevant`; otherwise `partially_relevant`. Sources listed in `GENERIC_SOURCES` (currently `general_security_baseline`, whose own title says it is domain-agnostic) apply to almost any system, so matching them says nothing about domain coverage. The rule is defined per source and applies to every domain; there are no per-domain cases. Relevance is computed from every chunk under the threshold, before the 8-chunk prompt cap.
 6. The LLM's considerations are schema-checked (known requirement IDs, real KB source names; invented names trigger the retry). Considerations citing a real source that was not among the kept chunks are dropped and listed in `dropped_considerations`; generic-baseline citations are kept even when `kb_relevance` is `not_relevant`, and every consideration carries `scope`: `"generic baseline"` or `"domain-specific"`.
 
-The response keeps its original keys and adds `domain_tags`, `retrieved_chunks` (id, source, scope, distance, matched requirement IDs, `applies_to_domain`), `dropped_considerations`, `compliance_mapping`, and on each consideration `scope` plus the section-11 analysis fields. The current UI shows the source name but not the `scope` label.
+The response keeps its original keys and adds `domain_tags`, `retrieved_chunks` (id, source, scope, distance, matched requirement IDs, `applies_to_domain`), `dropped_considerations`, `compliance_mapping`, and on each consideration `scope` plus the section-11 analysis fields. The UI shows the `scope` label ("generic baseline" or "domain-specific") on every mapping.
 
 Re-running the tuning set after this rule (2026-11-25) gave an identical sweep: threshold 0.62, precision 0.94, recall 0.81, as expected, since the rule changes how matches are aggregated, not which chunks pass. On domain-specific pairs alone, precision is 0.93 and recall 0.85 at 0.62. No tuning-set scenario changes label (none is baseline-only). Re-scoring the saved live railway runs, 1 and 3 change from `partially_relevant` to `not_relevant`, keeping their baseline citation.
 
@@ -315,6 +338,7 @@ Whatever the LLM sends for the code-set fields is overwritten, so it cannot appr
 - The six new traits have not been extracted live yet (quota); their reference values are hand ratings.
 - Generated stories, use cases, workflows, data and interface requirements are checked for structure and links only; they are listed as an open issue until someone reviews them. The SRS download store is in memory (last 20 runs).
 - A full pipeline run is now 8 LLM calls, which uses the free-tier quota quickly (`?artefacts=false` saves one).
+- The web UI is checked by static tests (files served, sample keys, constants, `node --check`) and a manual browser pass; there are no automated browser tests, and the pipeline shows elapsed time rather than stage progress.
 - Masking is pattern-based (no names or addresses), and the injection filter is a narrow pattern list.
 - The role header is trusted as sent, and the same role may modify and then approve an item; both need real authentication and a separation-of-duties rule. The audit log stores stage outputs, which can contain personal data, and the retention purge cannot remove them (see Retention). SQLite suits a single server process.
 - Workflow additions are LLM output checked only for structure (existing phase, field, known ids, no repeats); whether an addition is sensible is not measured.

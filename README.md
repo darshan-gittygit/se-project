@@ -13,7 +13,7 @@ Built by Darshan - NIT Karnataka, Surathkal (CS305 Software Engineering course p
                                                                    -> Quality check -> Agent 2: SDLC recommendation
 ```
 
-0. **Interview (optional, API only):** role-specific question templates for the 9 stakeholder roles in the problem statement, and an endpoint that returns the next follow-up questions from the answers collected so far.
+0. **Interview (optional):** role-specific question templates for the 9 stakeholder roles in the problem statement, and an endpoint that returns the next follow-up questions from the answers collected so far.
 1. **Agent 1 (requirements):** functional and non-functional requirement records with the problem statement's fields: categories, source stakeholder, the exact source text, business justification, priority, dependencies, assumptions, acceptance criteria, risk level, confidence (computed) and approval status (`proposed`).
 2. **Agent 3 (compliance and risk):** runs one retrieval query per requirement against the knowledge base in `knowledge_base/` (ChromaDB + Gemini embeddings) and passes only chunks under a tuned distance threshold to the LLM. Whether the knowledge base covers the domain (`kb_relevance`) is computed from those distances using domain-specific sources only; the domain-agnostic security baseline can still be cited, labelled "generic baseline", but never counts as coverage. Any citation of a source that was not retrieved is dropped, so the panel can only cite what was actually retrieved.
 3. **Agent 2 (SDLC):** the LLM rates 15 project traits (covering the problem statement's 13 decision factors) against fixed rubrics and must cite evidence; a deterministic engine ranks Waterfall, V-Model, Incremental, Agile, Spiral, DevSecOps and the Agile-V hybrid with percentage scores; the LLM then explains the result. The LLM never picks the model, and the choice is marked as needing approval by the project manager, architect, security team and compliance officer.
@@ -28,7 +28,7 @@ Every LLM reply is checked against a schema (`app/schemas.py`): allowed values, 
 
 **Input protection:** sensitive values (emails, phones, card numbers, Aadhaar/PAN-style ids, IBANs, account and SSN-style numbers) are replaced with placeholders such as `[EMAIL_1]` before any model call or storage, user text is fenced off as data in every prompt, and obvious injection attempts ("ignore previous instructions", "reveal your system prompt" ...) are rejected with 400. You can attach `.txt`, `.md` or `.csv` documents as JSON (`documents: [{"filename", "text"}]`, up to 20,000 characters each).
 
-**Approvals and audit (API):** each pipeline run is stored in `data/app.db` with its requirements, regulatory interpretations and SDLC selection as approval items. Send your role in an `X-Role` header (business analyst, product owner, security officer, compliance officer, project manager, architect, auditor) to accept, reject, modify or regenerate items (`POST /runs/<run_id>/approvals`) and to freeze the baseline (`POST /runs/<run_id>/baseline/freeze`). Every stage, action and artefact goes into a tamper-evident audit log the auditor can read at `GET /audit`. The role header is a stand-in for real sign-in; set `REQUIRE_ROLE=1` to reject requests without it. `RETENTION_DAYS` with `python -m app.retention` deletes old runs (audit history is kept). `/agents/pipeline?artefacts=false` skips the artefact LLM call.
+**Approvals and audit (UI and API):** each pipeline run is stored in `data/app.db` with its requirements, regulatory interpretations and SDLC selection as approval items. Send your role in an `X-Role` header (business analyst, product owner, security officer, compliance officer, project manager, architect, auditor) to accept, reject, modify or regenerate items (`POST /runs/<run_id>/approvals`) and to freeze the baseline (`POST /runs/<run_id>/baseline/freeze`). Every stage, action and artefact goes into a tamper-evident audit log the auditor and compliance officer can read at `GET /audit`. The role header is a stand-in for real sign-in; set `REQUIRE_ROLE=1` to reject requests without it. `RETENTION_DAYS` with `python -m app.retention` deletes old runs (audit history is kept). `/agents/pipeline?artefacts=false` skips the artefact LLM call.
 
 Download the SRS of a pipeline run from the links in its `srs` key, e.g. `GET /agents/srs/<id>?format=html`, or `POST /agents/srs?format=markdown` with a saved pipeline result.
 
@@ -59,6 +59,18 @@ python -m uvicorn app.main:app --reload --port 8001
 
 or double-click `run.bat`. Then open <http://127.0.0.1:8001/>. API docs are at `/docs`.
 
+## Using the web UI
+
+Plain HTML, CSS and JavaScript in `app/static/` (no framework, no build step; charts are inline SVG drawn by `charts.js`).
+
+- **Top bar:** pick your role; it is sent as the `X-Role` header on every request and decides which review actions the server accepts. "New analysis" clears the page.
+- **Scenario:** type the scenario, optionally answer role-specific template questions or ask for model follow-up questions, and attach `.txt`/`.md`/`.csv` files (read in the browser, sent as JSON). "Run full analysis" makes one `/agents/pipeline` request; the page shows the elapsed time while it runs (the server reports no per-stage progress, so none is shown). A banner reports how many sensitive values were masked (counts only).
+- **Requirements, Compliance and risk, SDLC, Artefacts:** every field the API returns: requirement records with quotes and quality flags, the compliance mapping (with the "Not a legal determination" notice and a "generic baseline" / "domain-specific" label), retrieved chunks, the risk register with a likelihood x impact grid, the SDLC result (radar of the 15 traits against the winner's profile, trait-by-model heat matrix, ranked bars, close-call banner, why-not text, workflow table, four approvers), and all artefacts with "Download SRS (Markdown)" and "Open printable SRS".
+- **Approvals:** accept / reject / modify / regenerate buttons on each item, blocking items, decision history and "Freeze baseline". 403 and 409 answers are shown as plain messages.
+- **Audit log** (auditor and compliance officer): filter by run, role and action; shows whether the hash chain verifies.
+- **Reloading** keeps a live run: its id is in the address (`#run=<id>`) and is reopened from the database.
+- **Load recorded sample:** shows `app/static/sample_run.json`, labelled "Recorded sample, not a live run", with no model calls (useful when the quota is used up). It was produced offline by `python -m scripts.make_sample_run` from mocked model replies and real knowledge-base paragraphs; replace it with a recorded live run before a demo. Approvals are disabled in sample mode because nothing is stored.
+
 ## Tests
 
 The tests run offline (Gemini and retrieval are mocked), so they need no key or internet:
@@ -68,7 +80,7 @@ pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-They cover the scoring engine (including that no model gets a per-model bonus), retrieval filtering and `kb_relevance`, schema validation and retries, the Gemini fallback and rate-limit logic, the analysis scripts, and every API route.
+They cover the scoring engine (including that no model gets a per-model bonus), retrieval filtering and `kb_relevance`, schema validation and retries, the Gemini fallback and rate-limit logic, the analysis scripts, every API route, and the UI's static files (the recorded sample's keys and that it holds no secrets, JS constants matching the backend, `node --check` when Node.js is installed).
 
 Analysis scripts (not part of the test run):
 
@@ -110,12 +122,12 @@ app/
     sdlc_agent.py            Agent 2 (trait extraction + justification)
     sdlc_rules.py            deterministic SDLC scoring engine
   rag/                       embeddings, ingest, retriever
-  static/                    index.html, style.css, app.js (the dashboard)
+  static/                    index.html, style.css, app.js (the UI), charts.js (SVG charts), sample_run.json
 knowledge_base/              curated compliance source documents (*.txt) + sources.json metadata
 chroma_db/                   generated vector store (rebuild with the ingest command)
 data/app.db                  local database (created on startup, gitignored)
 tests/                       offline test suite
-scripts/                     threshold tuning (live), win-share and sensitivity analysis (offline)
+scripts/                     threshold tuning (live), win-share and sensitivity analysis (offline), make_sample_run.py
 docs/ARCHITECTURE.md         design notes, diagrams, scoring tables
 docs/RAG_TUNING.md           relevance threshold tuning results
 docs/SCORING_ANALYSIS.md     win share and sensitivity of the SDLC scoring

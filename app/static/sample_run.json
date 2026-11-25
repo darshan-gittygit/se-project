@@ -1,0 +1,1993 @@
+{
+ "scenario": "A digital loan origination system for a mid-sized bank. Applicants upload identity and address documents for KYC verification, and declined applicants must be told the reason. Support questions go to [EMAIL_1]; fees are charged to test card [CARD_1].",
+ "answers": [
+  {
+   "role": "Risk-management teams",
+   "question": "What limits apply?",
+   "answer": "Loans above the bank's risk threshold need a second approver.",
+   "question_id": null,
+   "topic": null
+  }
+ ],
+ "documents": [],
+ "requirements": {
+  "domain_inferred": "Digital Loan Origination",
+  "assumptions": [
+   "Credit bureau API is available"
+  ],
+  "functional_requirements": [
+   {
+    "id": "FR-1",
+    "requirement": "The system shall verify applicant identity documents.",
+    "priority": "High",
+    "type": "FR",
+    "categories": [
+     "Functional",
+     "Regulatory"
+    ],
+    "source_stakeholder": "Compliance and legal officers",
+    "source_text": "upload identity and address documents for KYC verification",
+    "source_document": null,
+    "business_justification": "KYC is mandatory.",
+    "dependencies": [],
+    "assumptions": [],
+    "acceptance_criteria": [
+     "Documents are checked before approval"
+    ],
+    "applicable_regulations": [
+     "kyc_aml"
+    ],
+    "risk_level": "High",
+    "confidence": "High",
+    "approval_status": "proposed"
+   },
+   {
+    "id": "FR-2",
+    "requirement": "The system shall tell declined applicants the reason.",
+    "priority": "Medium",
+    "type": "FR",
+    "categories": [
+     "Functional"
+    ],
+    "source_stakeholder": "Customers and end users",
+    "source_text": "declined applicants must be told the reason",
+    "source_document": null,
+    "business_justification": "Fair lending.",
+    "dependencies": [
+     "FR-1"
+    ],
+    "assumptions": [
+     "Credit bureau API is available"
+    ],
+    "acceptance_criteria": [
+     "The decline notice states the reason"
+    ],
+    "applicable_regulations": [
+     "fair_lending"
+    ],
+    "risk_level": "Medium",
+    "confidence": "Medium",
+    "approval_status": "proposed"
+   }
+  ],
+  "non_functional_requirements": [
+   {
+    "id": "NFR-1",
+    "requirement": "The system shall return a credit decision within 5 seconds.",
+    "priority": "Medium",
+    "type": "NFR",
+    "categories": [
+     "Performance"
+    ],
+    "source_stakeholder": "Software architects and developers",
+    "source_text": "",
+    "source_document": null,
+    "business_justification": "Applicants abandon slow flows.",
+    "dependencies": [
+     "FR-1",
+     "FR-2"
+    ],
+    "assumptions": [
+     "5 seconds is acceptable | to applicants"
+    ],
+    "acceptance_criteria": [
+     "p95 under 5 s"
+    ],
+    "applicable_regulations": [],
+    "risk_level": "Medium",
+    "confidence": "Low",
+    "approval_status": "proposed"
+   },
+   {
+    "id": "NFR-2",
+    "requirement": "The system shall encrypt uploaded identity documents in transit and at rest.",
+    "priority": "High",
+    "type": "NFR",
+    "categories": [
+     "Security",
+     "Privacy"
+    ],
+    "source_stakeholder": "Information-security teams",
+    "source_text": "",
+    "source_document": null,
+    "business_justification": "Identity documents are sensitive personal data.",
+    "dependencies": [
+     "FR-1"
+    ],
+    "assumptions": [
+     "Documents are stored by the bank, not a third party"
+    ],
+    "acceptance_criteria": [
+     "TLS 1.2+ for uploads",
+     "AES-256 at rest"
+    ],
+    "applicable_regulations": [
+     "data_protection"
+    ],
+    "risk_level": "High",
+    "confidence": "Low",
+    "approval_status": "proposed"
+   }
+  ]
+ },
+ "compliance": {
+  "risk_level": "High",
+  "considerations": [
+   {
+    "related_requirement_ids": [
+     "FR-1"
+    ],
+    "note": "Verify identity documents and keep a record of verification decisions.",
+    "source": "kyc_aml",
+    "status": "satisfied",
+    "evidence": "A digital loan origination or account-opening system should therefore typically include: identity",
+    "compliance_gap": null,
+    "checkpoints": [
+     "Compliance sign-off of the KYC procedure before go-live"
+    ],
+    "retention_and_reporting": [
+     "Retain verification records"
+    ],
+    "scope": "domain-specific"
+   },
+   {
+    "related_requirement_ids": [
+     "FR-2"
+    ],
+    "note": "Give declined borrowers a reason for the decision.",
+    "source": "fair_lending",
+    "status": "gap",
+    "evidence": "Automated or algorithmic credit-scoring components carry additional expectations: the scoring",
+    "compliance_gap": "No process for a borrower to request the reason later.",
+    "checkpoints": [],
+    "retention_and_reporting": [],
+    "scope": "domain-specific"
+   },
+   {
+    "related_requirement_ids": [
+     "NFR-2"
+    ],
+    "note": "Encrypt sensitive personal data in transit and at rest.",
+    "source": "data_protection",
+    "status": "satisfied",
+    "evidence": "Modern data protection frameworks (such as India's Digital Personal Data",
+    "compliance_gap": null,
+    "checkpoints": [],
+    "retention_and_reporting": [],
+    "scope": "domain-specific"
+   },
+   {
+    "related_requirement_ids": [
+     "NFR-2"
+    ],
+    "note": "Baseline: encryption and access control for sensitive data.",
+    "source": "general_security_baseline",
+    "status": "satisfied",
+    "evidence": "Regardless of industry, most modern software systems that handle user",
+    "compliance_gap": null,
+    "checkpoints": [],
+    "retention_and_reporting": [],
+    "scope": "generic baseline"
+   }
+  ],
+  "summary": "Loan origination is regulated: identity verification, explainable decline reasons and protection of identity documents apply.",
+  "kb_relevance": "relevant",
+  "sources_consulted": [
+   "data_protection",
+   "fair_lending",
+   "general_security_baseline",
+   "kyc_aml",
+   "payment_security"
+  ],
+  "sources_used": [
+   "data_protection",
+   "fair_lending",
+   "general_security_baseline",
+   "kyc_aml"
+  ],
+  "domain_tags": [
+   "Loan origination and credit assessment",
+   "Customer onboarding and KYC"
+  ],
+  "retrieved_chunks": [
+   {
+    "id": "kyc_aml-4",
+    "source": "kyc_aml",
+    "scope": "domain-specific",
+    "distance": 0.43,
+    "matched_requirement_ids": [
+     "FR-1"
+    ],
+    "applies_to_domain": true
+   },
+   {
+    "id": "data_protection-1",
+    "source": "data_protection",
+    "scope": "domain-specific",
+    "distance": 0.55,
+    "matched_requirement_ids": [
+     "NFR-2"
+    ],
+    "applies_to_domain": true
+   },
+   {
+    "id": "kyc_aml-1",
+    "source": "kyc_aml",
+    "scope": "domain-specific",
+    "distance": 0.57,
+    "matched_requirement_ids": [
+     "FR-1"
+    ],
+    "applies_to_domain": true
+   },
+   {
+    "id": "general_security_baseline-1",
+    "source": "general_security_baseline",
+    "scope": "generic baseline",
+    "distance": 0.58,
+    "matched_requirement_ids": [
+     "NFR-2"
+    ],
+    "applies_to_domain": true
+   },
+   {
+    "id": "payment_security-0",
+    "source": "payment_security",
+    "scope": "domain-specific",
+    "distance": 0.6,
+    "matched_requirement_ids": [
+     "NFR-2"
+    ],
+    "applies_to_domain": false
+   },
+   {
+    "id": "fair_lending-3",
+    "source": "fair_lending",
+    "scope": "domain-specific",
+    "distance": 0.61,
+    "matched_requirement_ids": [
+     "FR-2"
+    ],
+    "applies_to_domain": true
+   }
+  ],
+  "dropped_considerations": []
+ },
+ "compliance_mapping": {
+  "notice": "Not a legal determination. Mappings are to a small curated knowledge base of paraphrased principles, not verbatim law. High-impact interpretations must be approved by compliance or legal officers.",
+  "requirements": [
+   {
+    "requirement_id": "FR-1",
+    "mappings": [
+     {
+      "source": "kyc_aml",
+      "regulation": "Know Your Customer (KYC) and Anti-Money Laundering (AML) Principles",
+      "scope": "domain-specific",
+      "jurisdiction": "India; principles common to most jurisdictions",
+      "version": "1",
+      "effective_date": "2026-11-25",
+      "chunk_id": "kyc_aml-4",
+      "distance": 0.43,
+      "status": "satisfied",
+      "required_control": "Verify identity documents and keep a record of verification decisions.",
+      "evidence": "A digital loan origination or account-opening system should therefore typically include: identity",
+      "evidence_verified": true,
+      "compliance_gap": null,
+      "checkpoints": [
+       "Compliance sign-off of the KYC procedure before go-live"
+      ],
+      "retention_and_reporting": [
+       "Retain verification records"
+      ],
+      "confidence": "High"
+     }
+    ],
+    "needs_human_review": false,
+    "review_reasons": []
+   },
+   {
+    "requirement_id": "FR-2",
+    "mappings": [
+     {
+      "source": "fair_lending",
+      "regulation": "Fair Lending and Responsible Credit Assessment Principles",
+      "scope": "domain-specific",
+      "jurisdiction": "India; principles common to most jurisdictions",
+      "version": "1",
+      "effective_date": "2026-11-25",
+      "chunk_id": "fair_lending-3",
+      "distance": 0.61,
+      "status": "gap",
+      "required_control": "Give declined borrowers a reason for the decision.",
+      "evidence": "Automated or algorithmic credit-scoring components carry additional expectations: the scoring",
+      "evidence_verified": true,
+      "compliance_gap": "No process for a borrower to request the reason later.",
+      "checkpoints": [],
+      "retention_and_reporting": [],
+      "confidence": "Low"
+     }
+    ],
+    "needs_human_review": true,
+    "review_reasons": [
+     "fair_lending: low-confidence match (distance 0.61)"
+    ]
+   },
+   {
+    "requirement_id": "NFR-1",
+    "mappings": [],
+    "needs_human_review": false,
+    "review_reasons": []
+   },
+   {
+    "requirement_id": "NFR-2",
+    "mappings": [
+     {
+      "source": "data_protection",
+      "regulation": "Data Protection and Privacy Principles",
+      "scope": "domain-specific",
+      "jurisdiction": "India; principles common to comparable frameworks elsewhere",
+      "version": "1",
+      "effective_date": "2026-11-25",
+      "chunk_id": "data_protection-1",
+      "distance": 0.55,
+      "status": "satisfied",
+      "required_control": "Encrypt sensitive personal data in transit and at rest.",
+      "evidence": "Modern data protection frameworks (such as India's Digital Personal Data",
+      "evidence_verified": true,
+      "compliance_gap": null,
+      "checkpoints": [],
+      "retention_and_reporting": [],
+      "confidence": "Medium"
+     },
+     {
+      "source": "general_security_baseline",
+      "regulation": "General Security and Privacy Baseline (Domain-Agnostic)",
+      "scope": "generic baseline",
+      "jurisdiction": "Not jurisdiction-specific",
+      "version": "1",
+      "effective_date": "2026-11-25",
+      "chunk_id": "general_security_baseline-1",
+      "distance": 0.58,
+      "status": "satisfied",
+      "required_control": "Baseline: encryption and access control for sensitive data.",
+      "evidence": "Regardless of industry, most modern software systems that handle user",
+      "evidence_verified": true,
+      "compliance_gap": null,
+      "checkpoints": [],
+      "retention_and_reporting": [],
+      "confidence": "Medium"
+     }
+    ],
+    "needs_human_review": false,
+    "review_reasons": []
+   }
+  ],
+  "review_count": 1
+ },
+ "quality": {
+  "flags": [
+   {
+    "requirement_ids": [
+     "FR-2",
+     "NFR-1"
+    ],
+    "type": "conflict",
+    "reason": "Waiting for the credit bureau can exceed the 5-second decision target.",
+    "suggested_fix": "Cache bureau data or relax the target for bureau timeouts.",
+    "detected_by": "llm"
+   }
+  ],
+  "counts": {
+   "ambiguity": 0,
+   "untestable": 0,
+   "duplicate": 0,
+   "conflict": 1
+  }
+ },
+ "risk_register": {
+  "risks": [
+   {
+    "id": "RISK-1",
+    "rank": 1,
+    "description": "Credit bureau outage blocks decisions within the response-time target",
+    "category": "Technical",
+    "likelihood": 3,
+    "likelihood_reason": "Recorded sample rating.",
+    "impact": 4,
+    "impact_reason": "Recorded sample rating.",
+    "score": 12,
+    "level": "High",
+    "mitigation": "Cache bureau responses and queue applications during outages",
+    "linked_requirement_ids": [
+     "FR-2",
+     "NFR-1"
+    ]
+   },
+   {
+    "id": "RISK-2",
+    "rank": 2,
+    "description": "No route for borrowers to request a decline reason later",
+    "category": "Compliance",
+    "likelihood": 4,
+    "likelihood_reason": "Recorded sample rating.",
+    "impact": 3,
+    "impact_reason": "Recorded sample rating.",
+    "score": 12,
+    "level": "High",
+    "mitigation": "Add a reason-request step to the decline notice",
+    "linked_requirement_ids": [
+     "FR-2"
+    ]
+   },
+   {
+    "id": "RISK-3",
+    "rank": 3,
+    "description": "Forged identity documents pass verification",
+    "category": "Security",
+    "likelihood": 2,
+    "likelihood_reason": "Recorded sample rating.",
+    "impact": 5,
+    "impact_reason": "Recorded sample rating.",
+    "score": 10,
+    "level": "High",
+    "mitigation": "Document forensics and liveness checks",
+    "linked_requirement_ids": [
+     "FR-1"
+    ]
+   },
+   {
+    "id": "RISK-4",
+    "rank": 4,
+    "description": "Document storage leaks applicant data",
+    "category": "Security",
+    "likelihood": 2,
+    "likelihood_reason": "Recorded sample rating.",
+    "impact": 4,
+    "impact_reason": "Recorded sample rating.",
+    "score": 8,
+    "level": "Medium",
+    "mitigation": "Encrypt at rest and restrict access",
+    "linked_requirement_ids": [
+     "NFR-2"
+    ]
+   },
+   {
+    "id": "RISK-5",
+    "rank": 5,
+    "description": "Scope growth from new loan products",
+    "category": "Business",
+    "likelihood": 2,
+    "likelihood_reason": "Recorded sample rating.",
+    "impact": 2,
+    "impact_reason": "Recorded sample rating.",
+    "score": 4,
+    "level": "Low",
+    "mitigation": "Change control on the product list",
+    "linked_requirement_ids": [
+     "FR-1"
+    ]
+   }
+  ],
+  "scoring": "score = likelihood x impact (1-25); High >= 10, Medium 5-9, Low 1-4",
+  "summary": {
+   "count": 5,
+   "by_level": {
+    "High": 3,
+    "Medium": 1,
+    "Low": 1
+   },
+   "likelihood_distribution": {
+    "1": 0,
+    "2": 3,
+    "3": 1,
+    "4": 1,
+    "5": 0
+   },
+   "impact_distribution": {
+    "1": 0,
+    "2": 1,
+    "3": 1,
+    "4": 2,
+    "5": 1
+   }
+  }
+ },
+ "sdlc_recommendation": {
+  "traits": {
+   "clarity": 4,
+   "volatility": 1,
+   "complexity": 3,
+   "criticality": 4,
+   "risk_uncertainty": 1,
+   "verification_validation": 4,
+   "stakeholder_feedback": 2,
+   "incremental_suitability": 3,
+   "prototyping_need": 1,
+   "security_risk": 4,
+   "system_size": 3,
+   "legacy_dependence": 3,
+   "continuous_delivery": 2,
+   "stakeholder_availability": 3,
+   "budget_schedule_constraint": 3
+  },
+  "trait_details": {
+   "clarity": {
+    "score": 4,
+    "evidence": "From the scenario and requirements (recorded sample).",
+    "reason": "Rated 4 against the rubric."
+   },
+   "volatility": {
+    "score": 1,
+    "evidence": "From the scenario and requirements (recorded sample).",
+    "reason": "Rated 1 against the rubric."
+   },
+   "complexity": {
+    "score": 3,
+    "evidence": "From the scenario and requirements (recorded sample).",
+    "reason": "Rated 3 against the rubric."
+   },
+   "criticality": {
+    "score": 4,
+    "evidence": "From the scenario and requirements (recorded sample).",
+    "reason": "Rated 4 against the rubric."
+   },
+   "risk_uncertainty": {
+    "score": 1,
+    "evidence": "From the scenario and requirements (recorded sample).",
+    "reason": "Rated 1 against the rubric."
+   },
+   "verification_validation": {
+    "score": 4,
+    "evidence": "From the scenario and requirements (recorded sample).",
+    "reason": "Rated 4 against the rubric."
+   },
+   "stakeholder_feedback": {
+    "score": 2,
+    "evidence": "From the scenario and requirements (recorded sample).",
+    "reason": "Rated 2 against the rubric."
+   },
+   "incremental_suitability": {
+    "score": 3,
+    "evidence": "From the scenario and requirements (recorded sample).",
+    "reason": "Rated 3 against the rubric."
+   },
+   "prototyping_need": {
+    "score": 1,
+    "evidence": "From the scenario and requirements (recorded sample).",
+    "reason": "Rated 1 against the rubric."
+   },
+   "security_risk": {
+    "score": 4,
+    "evidence": "From the scenario and requirements (recorded sample).",
+    "reason": "Rated 4 against the rubric."
+   },
+   "system_size": {
+    "score": 3,
+    "evidence": "From the scenario and requirements (recorded sample).",
+    "reason": "Rated 3 against the rubric."
+   },
+   "legacy_dependence": {
+    "score": 3,
+    "evidence": "From the scenario and requirements (recorded sample).",
+    "reason": "Rated 3 against the rubric."
+   },
+   "continuous_delivery": {
+    "score": 2,
+    "evidence": "From the scenario and requirements (recorded sample).",
+    "reason": "Rated 2 against the rubric."
+   },
+   "stakeholder_availability": {
+    "score": 3,
+    "evidence": "From the scenario and requirements (recorded sample).",
+    "reason": "Rated 3 against the rubric."
+   },
+   "budget_schedule_constraint": {
+    "score": 3,
+    "evidence": "From the scenario and requirements (recorded sample).",
+    "reason": "Rated 3 against the rubric."
+   }
+  },
+  "scored_models": [
+   {
+    "model": "V-Model",
+    "score": 79.6,
+    "profile": {
+     "clarity": 5,
+     "volatility": 1,
+     "complexity": 3,
+     "criticality": 5,
+     "risk_uncertainty": 2,
+     "verification_validation": 5,
+     "stakeholder_feedback": 1,
+     "incremental_suitability": 1,
+     "prototyping_need": 1,
+     "security_risk": 3,
+     "system_size": 4,
+     "legacy_dependence": 4,
+     "continuous_delivery": 1,
+     "stakeholder_availability": 2,
+     "budget_schedule_constraint": 3
+    },
+    "rank": 1,
+    "percent": "79.6%",
+    "why_not": null
+   },
+   {
+    "model": "Waterfall",
+    "score": 77.2,
+    "profile": {
+     "clarity": 5,
+     "volatility": 1,
+     "complexity": 2,
+     "criticality": 2,
+     "risk_uncertainty": 1,
+     "verification_validation": 2,
+     "stakeholder_feedback": 1,
+     "incremental_suitability": 1,
+     "prototyping_need": 1,
+     "security_risk": 3,
+     "system_size": 2,
+     "legacy_dependence": 3,
+     "continuous_delivery": 1,
+     "stakeholder_availability": 2,
+     "budget_schedule_constraint": 4
+    },
+    "rank": 2,
+    "percent": "77.2%",
+    "why_not": "Waterfall typically fits projects with lower project criticality (around 2/5) than this project's rated 4/5 - a gap of 2 points, the largest mismatch among the traits considered. This project's higher project criticality makes Waterfall a weaker structural fit here."
+   },
+   {
+    "model": "Agile-V",
+    "score": 73.3,
+    "profile": {
+     "clarity": 3,
+     "volatility": 4,
+     "complexity": 3,
+     "criticality": 5,
+     "risk_uncertainty": 2,
+     "verification_validation": 5,
+     "stakeholder_feedback": 4,
+     "incremental_suitability": 4,
+     "prototyping_need": 2,
+     "security_risk": 4,
+     "system_size": 4,
+     "legacy_dependence": 3,
+     "continuous_delivery": 3,
+     "stakeholder_availability": 4,
+     "budget_schedule_constraint": 2
+    },
+    "rank": 3,
+    "percent": "73.3%",
+    "why_not": "Agile-V typically fits projects with higher requirement volatility (around 4/5) than this project's rated 1/5 - a gap of 3 points, the largest mismatch among the traits considered. This project's lower requirement volatility makes Agile-V a weaker structural fit here."
+   },
+   {
+    "model": "Incremental",
+    "score": 70.4,
+    "profile": {
+     "clarity": 3,
+     "volatility": 3,
+     "complexity": 3,
+     "criticality": 2,
+     "risk_uncertainty": 2,
+     "verification_validation": 2,
+     "stakeholder_feedback": 3,
+     "incremental_suitability": 5,
+     "prototyping_need": 2,
+     "security_risk": 3,
+     "system_size": 4,
+     "legacy_dependence": 4,
+     "continuous_delivery": 3,
+     "stakeholder_availability": 3,
+     "budget_schedule_constraint": 4
+    },
+    "rank": 4,
+    "percent": "70.4%",
+    "why_not": "Incremental typically fits projects with higher requirement volatility (around 3/5) than this project's rated 1/5 - a gap of 2 points, the largest mismatch among the traits considered. This project's lower requirement volatility makes Incremental a weaker structural fit here."
+   },
+   {
+    "model": "DevSecOps",
+    "score": 68.7,
+    "profile": {
+     "clarity": 3,
+     "volatility": 4,
+     "complexity": 4,
+     "criticality": 4,
+     "risk_uncertainty": 2,
+     "verification_validation": 4,
+     "stakeholder_feedback": 4,
+     "incremental_suitability": 5,
+     "prototyping_need": 2,
+     "security_risk": 5,
+     "system_size": 3,
+     "legacy_dependence": 2,
+     "continuous_delivery": 5,
+     "stakeholder_availability": 4,
+     "budget_schedule_constraint": 3
+    },
+    "rank": 5,
+    "percent": "68.7%",
+    "why_not": "DevSecOps typically fits projects with higher requirement volatility (around 4/5) than this project's rated 1/5 - a gap of 3 points, the largest mismatch among the traits considered. This project's lower requirement volatility makes DevSecOps a weaker structural fit here."
+   },
+   {
+    "model": "Spiral",
+    "score": 62.8,
+    "profile": {
+     "clarity": 3,
+     "volatility": 3,
+     "complexity": 5,
+     "criticality": 5,
+     "risk_uncertainty": 5,
+     "verification_validation": 3,
+     "stakeholder_feedback": 2,
+     "incremental_suitability": 2,
+     "prototyping_need": 5,
+     "security_risk": 3,
+     "system_size": 5,
+     "legacy_dependence": 4,
+     "continuous_delivery": 2,
+     "stakeholder_availability": 3,
+     "budget_schedule_constraint": 1
+    },
+    "rank": 6,
+    "percent": "62.8%",
+    "why_not": "Spiral typically fits projects with higher risk/uncertainty (around 5/5) than this project's rated 1/5 - a gap of 4 points, the largest mismatch among the traits considered. This project's lower risk/uncertainty makes Spiral a weaker structural fit here."
+   },
+   {
+    "model": "Agile",
+    "score": 54.9,
+    "profile": {
+     "clarity": 2,
+     "volatility": 5,
+     "complexity": 3,
+     "criticality": 2,
+     "risk_uncertainty": 2,
+     "verification_validation": 1,
+     "stakeholder_feedback": 5,
+     "incremental_suitability": 5,
+     "prototyping_need": 2,
+     "security_risk": 3,
+     "system_size": 2,
+     "legacy_dependence": 2,
+     "continuous_delivery": 4,
+     "stakeholder_availability": 5,
+     "budget_schedule_constraint": 3
+    },
+    "rank": 7,
+    "percent": "54.9%",
+    "why_not": "Agile typically fits projects with higher requirement volatility (around 5/5) than this project's rated 1/5 - a gap of 4 points, the largest mismatch among the traits considered. This project's lower requirement volatility makes Agile a weaker structural fit here."
+   }
+  ],
+  "recommended_model": "V-Model",
+  "is_close_call": true,
+  "justification": {
+   "requirement_characteristics": "Requirements are clear and stable (clarity 4/5, volatility 1/5).",
+   "project_characteristics": "Failure has major financial and regulatory consequences (criticality 4/5) in a well-understood domain (risk/uncertainty 1/5).",
+   "engineering_justification": "Verification & validation intensity of 4/5 and the audit trail in FR-1 suit a plan-driven model with planned test levels.",
+   "key_tradeoffs": "Late changes to credit rules are costly."
+  },
+  "approval_required": {
+   "approvers": [
+    "Project manager",
+    "Architect",
+    "Security team",
+    "Compliance officer"
+   ],
+   "status": "pending",
+   "note": "Advisory only: adopting V-Model must be approved by the project manager, architect, security team and compliance officer (problem statement section 14). Nothing in this system records that approval yet."
+  }
+ },
+ "sdlc_workflow": {
+  "model": "V-Model",
+  "phases": [
+   {
+    "order": 1,
+    "name": "Requirements analysis",
+    "activities": [
+     {
+      "text": "Specify requirements",
+      "source": "base",
+      "requirement_ids": []
+     },
+     {
+      "text": "Write acceptance test plan",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "responsible_roles": [
+     {
+      "text": "Business analyst",
+      "source": "base",
+      "requirement_ids": []
+     },
+     {
+      "text": "Product owner",
+      "source": "base",
+      "requirement_ids": []
+     },
+     {
+      "text": "Testers",
+      "source": "base",
+      "requirement_ids": []
+     },
+     {
+      "text": "Compliance officer",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "deliverables": [
+     {
+      "text": "Software Requirements Specification",
+      "source": "base",
+      "requirement_ids": []
+     },
+     {
+      "text": "Acceptance test plan",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "security_activities": [
+     {
+      "text": "Identify security and privacy requirements",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "testing_requirements": [
+     {
+      "text": "Acceptance tests defined for every requirement",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "compliance_checkpoints": [
+     {
+      "text": "Map requirements to applicable regulations",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "approval_gates": [
+     {
+      "text": "Requirements baseline approved by the product owner and compliance officer",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "entry_criteria": [
+     {
+      "text": "Project charter approved",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "exit_criteria": [
+     {
+      "text": "Requirements and acceptance test plan approved",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "traceability_requirements": [
+     {
+      "text": "Every requirement keeps its id and link to its source statement",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ]
+   },
+   {
+    "order": 2,
+    "name": "System and architecture design",
+    "activities": [
+     {
+      "text": "Design system and architecture",
+      "source": "base",
+      "requirement_ids": []
+     },
+     {
+      "text": "Write system and integration test plans",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "responsible_roles": [
+     {
+      "text": "Architect",
+      "source": "base",
+      "requirement_ids": []
+     },
+     {
+      "text": "Testers",
+      "source": "base",
+      "requirement_ids": []
+     },
+     {
+      "text": "Security team",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "deliverables": [
+     {
+      "text": "Architecture specification",
+      "source": "base",
+      "requirement_ids": []
+     },
+     {
+      "text": "System and integration test plans",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "security_activities": [
+     {
+      "text": "Threat assessment of the architecture",
+      "source": "base",
+      "requirement_ids": []
+     },
+     {
+      "text": "Threat modelling of the document-upload flow",
+      "source": "scenario",
+      "requirement_ids": [
+       "FR-1",
+       "NFR-2"
+      ],
+      "reason": "Identity documents are a fraud target."
+     }
+    ],
+    "testing_requirements": [
+     {
+      "text": "System and integration tests defined",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "compliance_checkpoints": [
+     {
+      "text": "Design checked against compliance requirements",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "approval_gates": [
+     {
+      "text": "Architecture approved by the architect",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "entry_criteria": [
+     {
+      "text": "Requirements approved",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "exit_criteria": [
+     {
+      "text": "Design and test plans reviewed",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "traceability_requirements": [
+     {
+      "text": "Each design element traces to requirement ids",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ]
+   },
+   {
+    "order": 3,
+    "name": "Detailed design",
+    "activities": [
+     {
+      "text": "Design modules",
+      "source": "base",
+      "requirement_ids": []
+     },
+     {
+      "text": "Write unit test plans",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "responsible_roles": [
+     {
+      "text": "Developers",
+      "source": "base",
+      "requirement_ids": []
+     },
+     {
+      "text": "Testers",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "deliverables": [
+     {
+      "text": "Module designs",
+      "source": "base",
+      "requirement_ids": []
+     },
+     {
+      "text": "Unit test plans",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "security_activities": [
+     {
+      "text": "Secure design review of modules",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "testing_requirements": [
+     {
+      "text": "Unit tests defined for every module",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "compliance_checkpoints": [],
+    "approval_gates": [],
+    "entry_criteria": [
+     {
+      "text": "Architecture approved",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "exit_criteria": [
+     {
+      "text": "Module designs reviewed",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "traceability_requirements": [
+     {
+      "text": "Modules trace to design elements",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ]
+   },
+   {
+    "order": 4,
+    "name": "Implementation",
+    "activities": [
+     {
+      "text": "Code modules to the detailed design",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "responsible_roles": [
+     {
+      "text": "Developers",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "deliverables": [
+     {
+      "text": "Source code",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "security_activities": [
+     {
+      "text": "Secure coding standard; code review",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "testing_requirements": [
+     {
+      "text": "Static analysis on every module",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "compliance_checkpoints": [],
+    "approval_gates": [],
+    "entry_criteria": [
+     {
+      "text": "Module designs reviewed",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "exit_criteria": [
+     {
+      "text": "Code complete and reviewed",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "traceability_requirements": [
+     {
+      "text": "Commits and changes reference requirement ids",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ]
+   },
+   {
+    "order": 5,
+    "name": "Unit and integration testing",
+    "activities": [
+     {
+      "text": "Execute unit and integration test plans",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "responsible_roles": [
+     {
+      "text": "Developers",
+      "source": "base",
+      "requirement_ids": []
+     },
+     {
+      "text": "Testers",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "deliverables": [
+     {
+      "text": "Unit and integration test reports",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "security_activities": [
+     {
+      "text": "Security tests of interfaces",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "testing_requirements": [
+     {
+      "text": "All unit and integration tests pass",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "compliance_checkpoints": [],
+    "approval_gates": [],
+    "entry_criteria": [
+     {
+      "text": "Code complete",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "exit_criteria": [
+     {
+      "text": "Integration tests passed",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "traceability_requirements": [
+     {
+      "text": "Every test case references the requirement ids it verifies",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ]
+   },
+   {
+    "order": 6,
+    "name": "System and acceptance testing",
+    "activities": [
+     {
+      "text": "Execute system and acceptance test plans",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "responsible_roles": [
+     {
+      "text": "Testers",
+      "source": "base",
+      "requirement_ids": []
+     },
+     {
+      "text": "Product owner",
+      "source": "base",
+      "requirement_ids": []
+     },
+     {
+      "text": "Compliance officer",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "deliverables": [
+     {
+      "text": "System test report",
+      "source": "base",
+      "requirement_ids": []
+     },
+     {
+      "text": "Acceptance report",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "security_activities": [
+     {
+      "text": "Penetration test before release",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "testing_requirements": [
+     {
+      "text": "All system and acceptance tests pass",
+      "source": "base",
+      "requirement_ids": []
+     },
+     {
+      "text": "Decline-reason content tests for every decline path",
+      "source": "scenario",
+      "requirement_ids": [
+       "FR-2"
+      ],
+      "reason": "The compliance mapping found a gap here."
+     }
+    ],
+    "compliance_checkpoints": [
+     {
+      "text": "Compliance evidence reviewed by the compliance officer",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "approval_gates": [
+     {
+      "text": "Acceptance approved by the product owner",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "entry_criteria": [
+     {
+      "text": "Integration tests passed",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "exit_criteria": [
+     {
+      "text": "Acceptance criteria met",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "traceability_requirements": [
+     {
+      "text": "Test results traced back to every requirement",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ]
+   },
+   {
+    "order": 7,
+    "name": "Deployment",
+    "activities": [
+     {
+      "text": "Release to production",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "responsible_roles": [
+     {
+      "text": "Operations",
+      "source": "base",
+      "requirement_ids": []
+     },
+     {
+      "text": "Project manager",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "deliverables": [
+     {
+      "text": "Release notes",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "security_activities": [
+     {
+      "text": "Production hardening checklist",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "testing_requirements": [
+     {
+      "text": "Smoke test in production",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "compliance_checkpoints": [
+     {
+      "text": "Compliance sign-off before go-live",
+      "source": "base",
+      "requirement_ids": []
+     },
+     {
+      "text": "Compliance approval of the KYC procedure before go-live",
+      "source": "scenario",
+      "requirement_ids": [
+       "FR-1"
+      ],
+      "reason": "Checkpoint named by the compliance mapping."
+     }
+    ],
+    "approval_gates": [
+     {
+      "text": "Production readiness approved by the project manager, security team and compliance officer",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "entry_criteria": [
+     {
+      "text": "Acceptance criteria met",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "exit_criteria": [
+     {
+      "text": "System live and monitored",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "traceability_requirements": [
+     {
+      "text": "Release notes list the requirement ids delivered",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ]
+   }
+  ],
+  "added_items": 3,
+  "requirements_linked": [
+   "FR-1",
+   "FR-2",
+   "NFR-2"
+  ],
+  "notice": "Base phases and items are the fixed V-Model template; items with source \"scenario\" were added for this project by the LLM and cannot remove or rename anything. The model choice itself still needs the approvals listed in sdlc_recommendation.approval_required."
+ },
+ "artefacts": {
+  "user_stories": [
+   {
+    "id": "US-1",
+    "requirement_ids": [
+     "FR-1"
+    ],
+    "role": "loan applicant",
+    "goal": "to upload my identity and address documents",
+    "benefit": "my KYC check can start",
+    "acceptance_criteria": [
+     "Given a PDF or image, when I upload it, then it is stored and verification starts"
+    ],
+    "story": "As a loan applicant, I want to upload my identity and address documents, so that my KYC check can start.",
+    "source_statements": [
+     {
+      "requirement_id": "FR-1",
+      "stakeholder": "Compliance and legal officers",
+      "statement": "upload identity and address documents for KYC verification",
+      "assumptions": []
+     }
+    ]
+   },
+   {
+    "id": "US-2",
+    "requirement_ids": [
+     "FR-2"
+    ],
+    "role": "declined applicant",
+    "goal": "to see why my application was declined",
+    "benefit": "I can act on it",
+    "acceptance_criteria": [
+     "Given a decline, when I open the notice, then the specific reason is shown"
+    ],
+    "story": "As a declined applicant, I want to see why my application was declined, so that I can act on it.",
+    "source_statements": [
+     {
+      "requirement_id": "FR-2",
+      "stakeholder": "Customers and end users",
+      "statement": "declined applicants must be told the reason",
+      "assumptions": [
+       "Credit bureau API is available"
+      ]
+     }
+    ]
+   }
+  ],
+  "use_cases": [
+   {
+    "id": "UC-1",
+    "requirement_ids": [
+     "FR-2",
+     "NFR-1"
+    ],
+    "name": "Decline an application",
+    "primary_actor": "Credit officer",
+    "preconditions": [
+     "Credit score computed"
+    ],
+    "main_flow": [
+     "Officer reviews the score",
+     "Officer declines",
+     "System sends the decline reason"
+    ],
+    "alternative_flows": [
+     "Score unavailable: application queued"
+    ],
+    "postconditions": [
+     "Applicant informed"
+    ],
+    "source_statements": [
+     {
+      "requirement_id": "FR-2",
+      "stakeholder": "Customers and end users",
+      "statement": "declined applicants must be told the reason",
+      "assumptions": [
+       "Credit bureau API is available"
+      ]
+     },
+     {
+      "requirement_id": "NFR-1",
+      "stakeholder": "Software architects and developers",
+      "statement": "",
+      "assumptions": [
+       "5 seconds is acceptable | to applicants"
+      ]
+     }
+    ]
+   }
+  ],
+  "process_workflows": [
+   {
+    "id": "PW-1",
+    "requirement_ids": [
+     "FR-1",
+     "FR-2",
+     "NFR-1"
+    ],
+    "name": "Loan application to decision",
+    "steps": [
+     {
+      "actor": "Applicant",
+      "action": "Uploads identity and address documents"
+     },
+     {
+      "actor": "System",
+      "action": "Runs KYC verification"
+     },
+     {
+      "actor": "System",
+      "action": "Calculates the credit score"
+     },
+     {
+      "actor": "Credit officer",
+      "action": "Approves or declines with a reason"
+     }
+    ],
+    "source_statements": [
+     {
+      "requirement_id": "FR-1",
+      "stakeholder": "Compliance and legal officers",
+      "statement": "upload identity and address documents for KYC verification",
+      "assumptions": []
+     },
+     {
+      "requirement_id": "FR-2",
+      "stakeholder": "Customers and end users",
+      "statement": "declined applicants must be told the reason",
+      "assumptions": [
+       "Credit bureau API is available"
+      ]
+     },
+     {
+      "requirement_id": "NFR-1",
+      "stakeholder": "Software architects and developers",
+      "statement": "",
+      "assumptions": [
+       "5 seconds is acceptable | to applicants"
+      ]
+     }
+    ]
+   }
+  ],
+  "data_requirements": [
+   {
+    "id": "DR-1",
+    "requirement_ids": [
+     "FR-1",
+     "NFR-2"
+    ],
+    "entity": "Applicant document",
+    "description": "Uploaded KYC document",
+    "attributes": [
+     "document type",
+     "file",
+     "verification status"
+    ],
+    "retention": "",
+    "source_statements": [
+     {
+      "requirement_id": "FR-1",
+      "stakeholder": "Compliance and legal officers",
+      "statement": "upload identity and address documents for KYC verification",
+      "assumptions": []
+     },
+     {
+      "requirement_id": "NFR-2",
+      "stakeholder": "Information-security teams",
+      "statement": "",
+      "assumptions": [
+       "Documents are stored by the bank, not a third party"
+      ]
+     }
+    ]
+   }
+  ],
+  "interface_requirements": [
+   {
+    "id": "IR-1",
+    "requirement_ids": [
+     "NFR-1"
+    ],
+    "name": "Credit bureau API",
+    "interface_type": "Software interface",
+    "description": "Fetch bureau data for scoring",
+    "source_statements": [
+     {
+      "requirement_id": "NFR-1",
+      "stakeholder": "Software architects and developers",
+      "statement": "",
+      "assumptions": [
+       "5 seconds is acceptable | to applicants"
+      ]
+     }
+    ]
+   }
+  ],
+  "traceability_matrix": [
+   {
+    "requirement_id": "FR-1",
+    "type": "FR",
+    "requirement": "The system shall verify applicant identity documents.",
+    "source": {
+     "requirement_id": "FR-1",
+     "stakeholder": "Compliance and legal officers",
+     "statement": "upload identity and address documents for KYC verification",
+     "assumptions": []
+    },
+    "compliance_sources": [
+     {
+      "source": "kyc_aml",
+      "status": "satisfied",
+      "confidence": "High"
+     }
+    ],
+    "risk_ids": [
+     "RISK-3",
+     "RISK-5"
+    ],
+    "user_stories_ids": [
+     "US-1"
+    ],
+    "use_cases_ids": [],
+    "process_workflows_ids": [
+     "PW-1"
+    ],
+    "data_requirements_ids": [
+     "DR-1"
+    ],
+    "interface_requirements_ids": [],
+    "workflow_items": [
+     "System and architecture design: Threat modelling of the document-upload flow",
+     "Deployment: Compliance approval of the KYC procedure before go-live"
+    ],
+    "approval_status": "proposed"
+   },
+   {
+    "requirement_id": "FR-2",
+    "type": "FR",
+    "requirement": "The system shall tell declined applicants the reason.",
+    "source": {
+     "requirement_id": "FR-2",
+     "stakeholder": "Customers and end users",
+     "statement": "declined applicants must be told the reason",
+     "assumptions": [
+      "Credit bureau API is available"
+     ]
+    },
+    "compliance_sources": [
+     {
+      "source": "fair_lending",
+      "status": "gap",
+      "confidence": "Low"
+     }
+    ],
+    "risk_ids": [
+     "RISK-1",
+     "RISK-2"
+    ],
+    "user_stories_ids": [
+     "US-2"
+    ],
+    "use_cases_ids": [
+     "UC-1"
+    ],
+    "process_workflows_ids": [
+     "PW-1"
+    ],
+    "data_requirements_ids": [],
+    "interface_requirements_ids": [],
+    "workflow_items": [
+     "System and acceptance testing: Decline-reason content tests for every decline path"
+    ],
+    "approval_status": "proposed"
+   },
+   {
+    "requirement_id": "NFR-1",
+    "type": "NFR",
+    "requirement": "The system shall return a credit decision within 5 seconds.",
+    "source": {
+     "requirement_id": "NFR-1",
+     "stakeholder": "Software architects and developers",
+     "statement": "",
+     "assumptions": [
+      "5 seconds is acceptable | to applicants"
+     ]
+    },
+    "compliance_sources": [],
+    "risk_ids": [
+     "RISK-1"
+    ],
+    "user_stories_ids": [],
+    "use_cases_ids": [
+     "UC-1"
+    ],
+    "process_workflows_ids": [
+     "PW-1"
+    ],
+    "data_requirements_ids": [],
+    "interface_requirements_ids": [
+     "IR-1"
+    ],
+    "workflow_items": [],
+    "approval_status": "proposed"
+   },
+   {
+    "requirement_id": "NFR-2",
+    "type": "NFR",
+    "requirement": "The system shall encrypt uploaded identity documents in transit and at rest.",
+    "source": {
+     "requirement_id": "NFR-2",
+     "stakeholder": "Information-security teams",
+     "statement": "",
+     "assumptions": [
+      "Documents are stored by the bank, not a third party"
+     ]
+    },
+    "compliance_sources": [
+     {
+      "source": "data_protection",
+      "status": "satisfied",
+      "confidence": "Medium"
+     },
+     {
+      "source": "general_security_baseline",
+      "status": "satisfied",
+      "confidence": "Medium"
+     }
+    ],
+    "risk_ids": [
+     "RISK-4"
+    ],
+    "user_stories_ids": [],
+    "use_cases_ids": [],
+    "process_workflows_ids": [],
+    "data_requirements_ids": [
+     "DR-1"
+    ],
+    "interface_requirements_ids": [],
+    "workflow_items": [
+     "System and architecture design: Threat modelling of the document-upload flow"
+    ],
+    "approval_status": "proposed"
+   }
+  ],
+  "compliance_control_matrix": [
+   {
+    "requirement_id": "FR-1",
+    "regulation": "Know Your Customer (KYC) and Anti-Money Laundering (AML) Principles",
+    "source": "kyc_aml",
+    "scope": "domain-specific",
+    "jurisdiction": "India; principles common to most jurisdictions",
+    "version": "1",
+    "effective_date": "2026-11-25",
+    "required_control": "Verify identity documents and keep a record of verification decisions.",
+    "status": "satisfied",
+    "compliance_gap": null,
+    "evidence": "A digital loan origination or account-opening system should therefore typically include: identity",
+    "evidence_verified": true,
+    "checkpoints": [
+     "Compliance sign-off of the KYC procedure before go-live"
+    ],
+    "retention_and_reporting": [
+     "Retain verification records"
+    ],
+    "confidence": "High",
+    "needs_human_review": false
+   },
+   {
+    "requirement_id": "FR-2",
+    "regulation": "Fair Lending and Responsible Credit Assessment Principles",
+    "source": "fair_lending",
+    "scope": "domain-specific",
+    "jurisdiction": "India; principles common to most jurisdictions",
+    "version": "1",
+    "effective_date": "2026-11-25",
+    "required_control": "Give declined borrowers a reason for the decision.",
+    "status": "gap",
+    "compliance_gap": "No process for a borrower to request the reason later.",
+    "evidence": "Automated or algorithmic credit-scoring components carry additional expectations: the scoring",
+    "evidence_verified": true,
+    "checkpoints": [],
+    "retention_and_reporting": [],
+    "confidence": "Low",
+    "needs_human_review": true
+   },
+   {
+    "requirement_id": "NFR-2",
+    "regulation": "Data Protection and Privacy Principles",
+    "source": "data_protection",
+    "scope": "domain-specific",
+    "jurisdiction": "India; principles common to comparable frameworks elsewhere",
+    "version": "1",
+    "effective_date": "2026-11-25",
+    "required_control": "Encrypt sensitive personal data in transit and at rest.",
+    "status": "satisfied",
+    "compliance_gap": null,
+    "evidence": "Modern data protection frameworks (such as India's Digital Personal Data",
+    "evidence_verified": true,
+    "checkpoints": [],
+    "retention_and_reporting": [],
+    "confidence": "Medium",
+    "needs_human_review": false
+   },
+   {
+    "requirement_id": "NFR-2",
+    "regulation": "General Security and Privacy Baseline (Domain-Agnostic)",
+    "source": "general_security_baseline",
+    "scope": "generic baseline",
+    "jurisdiction": "Not jurisdiction-specific",
+    "version": "1",
+    "effective_date": "2026-11-25",
+    "required_control": "Baseline: encryption and access control for sensitive data.",
+    "status": "satisfied",
+    "compliance_gap": null,
+    "evidence": "Regardless of industry, most modern software systems that handle user",
+    "evidence_verified": true,
+    "checkpoints": [],
+    "retention_and_reporting": [],
+    "confidence": "Medium",
+    "needs_human_review": false
+   }
+  ],
+  "assumptions_register": {
+   "assumptions": [
+    {
+     "id": "A-1",
+     "text": "Credit bureau API is available",
+     "scope": "project",
+     "requirement_ids": [
+      "FR-2"
+     ]
+    },
+    {
+     "id": "A-2",
+     "text": "5 seconds is acceptable | to applicants",
+     "scope": "requirement",
+     "requirement_ids": [
+      "NFR-1"
+     ]
+    },
+    {
+     "id": "A-3",
+     "text": "Documents are stored by the bank, not a third party",
+     "scope": "requirement",
+     "requirement_ids": [
+      "NFR-2"
+     ]
+    }
+   ],
+   "dependencies": [
+    {
+     "requirement_id": "FR-2",
+     "depends_on": [
+      "FR-1"
+     ]
+    },
+    {
+     "requirement_id": "NFR-1",
+     "depends_on": [
+      "FR-1",
+      "FR-2"
+     ]
+    },
+    {
+     "requirement_id": "NFR-2",
+     "depends_on": [
+      "FR-1"
+     ]
+    }
+   ]
+  },
+  "open_issues": [
+   {
+    "id": "ISSUE-1",
+    "type": "conflict",
+    "description": "Waiting for the credit bureau can exceed the 5-second decision target. Suggested fix: Cache bureau data or relax the target for bureau timeouts.",
+    "requirement_ids": [
+     "FR-2",
+     "NFR-1"
+    ],
+    "origin": "quality check (llm)"
+   },
+   {
+    "id": "ISSUE-2",
+    "type": "compliance review",
+    "description": "fair_lending: low-confidence match (distance 0.61)",
+    "requirement_ids": [
+     "FR-2"
+    ],
+    "origin": "compliance mapping"
+   },
+   {
+    "id": "ISSUE-3",
+    "type": "pending approval",
+    "description": "4 requirement(s) are proposed and not yet approved (requirement baseline).",
+    "requirement_ids": [
+     "FR-1",
+     "FR-2",
+     "NFR-1",
+     "NFR-2"
+    ],
+    "origin": "requirement records"
+   },
+   {
+    "id": "ISSUE-4",
+    "type": "unverified",
+    "description": "Requirement(s) have no quote from a stakeholder statement and rest on assumptions only.",
+    "requirement_ids": [
+     "NFR-1",
+     "NFR-2"
+    ],
+    "origin": "requirement records"
+   },
+   {
+    "id": "ISSUE-5",
+    "type": "pending approval",
+    "description": "SDLC model V-Model awaits approval by Project manager, Architect, Security team, Compliance officer.",
+    "requirement_ids": [],
+    "origin": "SDLC recommendation"
+   },
+   {
+    "id": "ISSUE-6",
+    "type": "close call",
+    "description": "V-Model is within 5 points of Waterfall (77.2%); review the choice.",
+    "requirement_ids": [],
+    "origin": "SDLC recommendation"
+   },
+   {
+    "id": "ISSUE-7",
+    "type": "unverified",
+    "description": "6 generated artefact item(s) (user stories, use cases, workflows, data and interface requirements) are LLM output that nobody has reviewed yet.",
+    "requirement_ids": [],
+    "origin": "artefact generation"
+   },
+   {
+    "id": "ISSUE-8",
+    "type": "unverified",
+    "description": "3 scenario-specific workflow item(s) were added by the LLM and are not reviewed yet.",
+    "requirement_ids": [
+     "FR-1",
+     "FR-2",
+     "NFR-2"
+    ],
+    "origin": "workflow generator"
+   }
+  ],
+  "generation": {
+   "llm_calls": 1,
+   "split": false,
+   "note": "Generated in one call."
+  }
+ },
+ "meta": {
+  "model": null,
+  "models_used": [],
+  "app_version": "0.5.1",
+  "kb_version": "kb-736d1d3a3860",
+  "embedding_model": "gemini-embedding-001",
+  "models": []
+ },
+ "masking": {
+  "counts": {
+   "EMAIL": 1,
+   "CARD": 1
+  },
+  "total": 2,
+  "classification": "contains sensitive financial or identity data",
+  "fields": [
+   "scenario"
+  ],
+  "note": "Values were replaced by placeholders before any model call or storage; originals are not kept."
+ },
+ "versions": {
+  "app_version": "0.5.1",
+  "kb_version": "kb-736d1d3a3860",
+  "embedding_model": "gemini-embedding-001",
+  "models": []
+ },
+ "run_id": "bdd676c8d91a",
+ "srs": {
+  "id": "bdd676c8d91a",
+  "markdown_url": "/agents/srs/bdd676c8d91a?format=markdown",
+  "html_url": "/agents/srs/bdd676c8d91a?format=html",
+  "note": "Stored in the local database with the run; the SRS shows the current approval state."
+ },
+ "_sample": {
+  "label": "Recorded sample, not a live run",
+  "note": "Generated offline by scripts/make_sample_run.py from the test fixture's data with mocked model replies and real knowledge-base paragraphs. Replace it with a recorded live run."
+ }
+}

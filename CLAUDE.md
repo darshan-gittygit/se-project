@@ -11,7 +11,7 @@ Course project (CS305 Software Engineering, NITK, solo, by Darshan). A FastAPI a
 
 ## Rules for changes
 
-- Do not redesign the UI (dark glassmorphism, 4-stage flow, Requora AI branding, "by Darshan" credit). Extend it; do not replace it.
+- The UI is being rebuilt in Phase 7; after that phase, keep UI changes small.
 - SDLC scoring stays deterministic: the LLM extracts traits (with evidence) and writes explanations, but never chooses the model. No hidden bonus for any model, no hardcoded domain -> model mapping. `tests/test_scoring.py` enforces fairness; keep it passing.
 - Explanations must never contradict measured trait scores.
 - Compliance stays honest: cite only retrieved knowledge-base content; say when the KB does not cover a domain. Never fabricate citations or confidence percentages.
