@@ -15,6 +15,7 @@ track_models), so the API can report it instead of the configured name.
 Wiring check (sends one tiny prompt): python -m app.gemini_client
 """
 import contextvars
+import hashlib
 import re
 import time
 from contextlib import contextmanager
@@ -44,6 +45,22 @@ RATE_LIMIT_MAX_DELAY = 10   # never block a request longer than this per wait
 RATE_LIMIT_SKIP_AFTER = 60  # a hint longer than this is a long (e.g. daily) quota: don't wait, try the next model
 
 _models_used: contextvars.ContextVar[list | None] = contextvars.ContextVar("requora_models_used", default=None)
+_call_log: contextvars.ContextVar[list | None] = contextvars.ContextVar("requora_call_log", default=None)
+
+
+@contextmanager
+def track_calls():
+    """
+    Collects one record per successful generate_text call made inside the
+    block: {"model", "prompt_sha256", "prompt_chars"}. For the audit log; the
+    prompt text itself is never kept (it may contain sensitive input).
+    """
+    calls: list[dict] = []
+    token = _call_log.set(calls)
+    try:
+        yield calls
+    finally:
+        _call_log.reset(token)
 
 
 @contextmanager
@@ -132,6 +149,11 @@ def generate_text(prompt: str, temperature: float = 0.3) -> str:
                 calls = _models_used.get()
                 if calls is not None:
                     calls.append(model_name)
+                log = _call_log.get()
+                if log is not None:
+                    log.append({"model": model_name,
+                                "prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
+                                "prompt_chars": len(prompt)})
                 return text
             except genai_errors.ClientError as e:
                 attempts.append(f"{model_name}: {_short_reason(e)}")

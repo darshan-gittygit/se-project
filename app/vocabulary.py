@@ -6,7 +6,8 @@ so schemas, prompts and interview templates all use the same labels.
 - INTERVIEW_TOPICS: section 7 "Design requirement-gathering conversations"
 - REQUIREMENT_CATEGORIES: section 9 "Classify the requirements"
 - APPROVAL_STATUSES: section 16 (users accept, reject or modify AI outputs);
-  every generated requirement starts as "proposed"
+  every generated requirement starts as "proposed"; older versions of an
+  item are kept in the database with status "superseded"
 """
 
 STAKEHOLDER_ROLES = (
@@ -55,7 +56,8 @@ REQUIREMENT_CATEGORIES = (
 
 LEVELS = ("High", "Medium", "Low")
 
-APPROVAL_STATUSES = ("proposed", "accepted", "rejected", "modified")
+# Phase 5A: the action is "accept", the resulting status is "approved".
+APPROVAL_STATUSES = ("proposed", "approved", "rejected", "modified")
 
 
 def canonical(value, allowed: tuple[str, ...]):

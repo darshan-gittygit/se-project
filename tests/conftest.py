@@ -10,5 +10,8 @@ from pathlib import Path
 # real request is ever sent during tests.
 os.environ.setdefault("GEMINI_API_KEY", "test-key-not-real")
 os.environ.setdefault("GEMINI_MODEL", "test-model")
+# Never touch data/app.db from tests: one throwaway database per test session.
+import tempfile  # noqa: E402
+os.environ["REQUORA_DB_PATH"] = os.path.join(tempfile.mkdtemp(prefix="requora-test-"), "app.db")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))

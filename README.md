@@ -26,6 +26,8 @@ Built by Darshan - NIT Karnataka, Surathkal (CS305 Software Engineering course p
 
 Every LLM reply is checked against a schema (`app/schemas.py`): allowed values, known requirement IDs, real knowledge-base sources, all nine traits as integers 1-5. An invalid reply is retried once with the errors, then the API returns a 502 rather than guessing.
 
+**Approvals and audit (API):** each pipeline run is stored in `data/app.db` with its requirements, regulatory interpretations and SDLC selection as approval items. Send your role in an `X-Role` header (business analyst, product owner, security officer, compliance officer, project manager, architect, auditor) to accept, reject, modify or regenerate items (`POST /runs/<run_id>/approvals`) and to freeze the baseline (`POST /runs/<run_id>/baseline/freeze`). Every stage, action and artefact goes into a tamper-evident audit log the auditor can read at `GET /audit`. The role header is a stand-in for real sign-in. `/agents/pipeline?artefacts=false` skips the artefact LLM call.
+
 Download the SRS of a pipeline run from the links in its `srs` key, e.g. `GET /agents/srs/<id>?format=html`, or `POST /agents/srs?format=markdown` with a saved pipeline result.
 
 Details, the class diagram and the full scoring tables are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -94,6 +96,10 @@ app/
     artefact_agent.py        user stories, use cases, process workflows, data and interface requirements
   artefacts.py               traceability matrix, compliance-control matrix, registers, open issues (no LLM)
   srs.py                     SRS as Markdown and print-friendly HTML
+  db.py, runs.py             SQLite storage: runs, approval items, decisions, audit events
+  roles.py                   roles (X-Role header) and the permission table
+  approvals.py               accept / reject / modify / regenerate, versions, baseline freeze
+  audit.py                   append-only, hash-chained audit log and its verifier
     compliance_agent.py      Agent 3 (RAG)
     sdlc_agent.py            Agent 2 (trait extraction + justification)
     sdlc_rules.py            deterministic SDLC scoring engine
@@ -101,6 +107,7 @@ app/
   static/                    index.html, style.css, app.js (the dashboard)
 knowledge_base/              curated compliance source documents (*.txt) + sources.json metadata
 chroma_db/                   generated vector store (rebuild with the ingest command)
+data/app.db                  local database (created on startup, gitignored)
 tests/                       offline test suite
 scripts/                     threshold tuning (live), win-share and sensitivity analysis (offline)
 docs/ARCHITECTURE.md         design notes, diagrams, scoring tables

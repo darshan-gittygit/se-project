@@ -82,3 +82,17 @@ def source_info(source: str) -> dict:
     """Jurisdiction, version and effective date for a source (empty strings if unknown)."""
     meta = load_metadata().get(source, {})
     return {k: meta.get(k, "") for k in ("jurisdiction", "version", "effective_date")}
+
+
+def kb_version() -> str:
+    """
+    Version of the knowledge base as a whole (section 17: knowledge-base
+    versioning): a short SHA-256 over every document and sources.json, so it
+    changes whenever any KB file changes. Recorded in every audit event.
+    """
+    import hashlib
+    h = hashlib.sha256()
+    for path in sorted(KNOWLEDGE_BASE_DIR.glob("*.txt")) + [METADATA_FILE]:
+        h.update(path.name.encode("utf-8"))
+        h.update(path.read_bytes())
+    return "kb-" + h.hexdigest()[:12]

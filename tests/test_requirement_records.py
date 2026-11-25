@@ -47,7 +47,7 @@ def test_record_has_every_section_8_field_and_keeps_the_old_keys():
 
 
 def test_code_set_fields_override_whatever_the_llm_sends():
-    fr = validate([record("FR-1", "x", approval_status="accepted", applicable_regulations=["RBI Master Direction"],
+    fr = validate([record("FR-1", "x", approval_status="approved", applicable_regulations=["RBI Master Direction"],
                           confidence="High", type="NFR")])["functional_requirements"][0]
     assert fr["approval_status"] == "proposed"
     assert fr["applicable_regulations"] == []

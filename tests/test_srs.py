@@ -1,7 +1,7 @@
 """Phase 4 step 3: SRS assembly and rendering. Offline, no LLM."""
 import re
 
-from app.srs import NOTICE, SrsStore, build_blocks, render_html, render_markdown
+from app.srs import NOTICE, build_blocks, render_html, render_markdown
 from tests.artefact_fixtures import REQUIREMENTS, pipeline_result
 
 WHEN = "2026-11-26 10:00 UTC"
@@ -83,10 +83,3 @@ def test_markdown_and_html_come_from_the_same_blocks():
     md_rows = render_markdown(blocks).count("\n| ") - sum(1 for b in blocks if b[0] == "table" and b[2])
     html_rows = render_html(blocks).count("<tr>") - sum(1 for b in blocks if b[0] == "table" and b[2])
     assert md_rows == html_rows
-
-
-def test_store_keeps_the_most_recent_results():
-    store = SrsStore(capacity=2)
-    a, b, c = store.put({"n": 1}), store.put({"n": 2}), store.put({"n": 3})
-    assert store.get(a) is None and store.get(b) == {"n": 2} and store.get(c) == {"n": 3}
-    assert len(b) == 12 and store.get("nope") is None

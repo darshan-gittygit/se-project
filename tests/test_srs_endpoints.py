@@ -63,11 +63,15 @@ def test_unknown_srs_id_is_404_and_bad_format_is_422():
     assert client.get("/agents/srs/doesnotexist?format=docx").status_code == 422
 
 
-def test_srs_store_evicts_old_runs(pipeline, monkeypatch):
-    monkeypatch.setattr(main_mod, "SRS_STORE", main_mod.SrsStore(capacity=1))
-    first = pipeline().json()["srs"]["id"]
-    pipeline()
-    assert client.get(f"/agents/srs/{first}").status_code == 404
+def test_runs_and_srs_survive_a_restart(pipeline, monkeypatch):
+    # A "restart" = a fresh process state: no cached schema flag, new connections, same database file.
+    import app.db as db
+    run_id = pipeline().json()["run_id"]
+    monkeypatch.setattr(db, "_initialised", set())
+    from app.runs import get_run
+    assert get_run(run_id)["result"]["requirements"]["domain_inferred"] == "Digital Loan Origination"
+    r = client.get(f"/agents/srs/{run_id}?format=markdown")
+    assert r.status_code == 200 and "Digital Loan Origination" in r.text
 
 
 @pytest.mark.parametrize("fmt, kind", [("markdown", "text/markdown"), ("html", "text/html")])
@@ -93,3 +97,27 @@ def test_pipeline_artefact_step_retries_then_502(pipeline):
     assert r.status_code == 502
     assert r.json()["detail"].startswith("Artefact generator failed: model output failed validation")
     assert sum("writing the artefacts of a Software Requirements Specification" in p for p in pipeline.seen) == 2
+
+
+def test_artefacts_false_skips_the_artefact_llm_call(monkeypatch):
+    import app.agents.risk_agent as ra
+    import app.agents.workflow_agent as wa
+    seen = []
+    fake = p1.router(seen=seen)
+    for mod in (p1.req_mod, p1.comp_mod, p1.quality_mod, p1.sdlc_mod, ra, wa):
+        monkeypatch.setattr(mod, "generate_text", fake)
+    monkeypatch.setattr(aa, "generate_text", lambda *a, **k: pytest.fail("artefact LLM call must be skipped"))
+    monkeypatch.setattr(p1.comp_mod, "retrieve_many", lambda qs, top_k=3: [[] for _ in qs])
+    d = client.post("/agents/pipeline?artefacts=false", json={"scenario": p1.SCENARIO}).json()
+    art = d["artefacts"]
+    assert all(art[k] == [] for k in GENERATED_KEYS)
+    assert art["generation"]["skipped"] is True and art["generation"]["llm_calls"] == 0
+    assert [r["requirement_id"] for r in art["traceability_matrix"]] == ["FR-1", "FR-2", "NFR-1"]  # code artefacts still built
+    assert not any("writing the artefacts" in p for p in seen)
+    assert not any(i["origin"] == "artefact generation" for i in art["open_issues"])
+    md = client.get(d["srs"]["markdown_url"]).text
+    assert "## 5. User stories\n\nNone generated." in md
+
+
+def test_artefacts_flag_defaults_to_on(pipeline):
+    assert pipeline().json()["artefacts"]["generation"]["llm_calls"] == 1

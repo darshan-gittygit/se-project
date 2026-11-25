@@ -215,6 +215,13 @@ Respond with ONLY valid JSON, no markdown fences, in exactly this schema:
 """
 
 
+REVIEWER_NOTE = """
+
+A human reviewer asked for this to be regenerated, with this comment. Address it while following every rule above:
+{comment}
+"""
+
+
 def _format_requirements(reqs: list[dict]) -> str:
     return "\n".join(f"- {r['id']}: {r['requirement']}" for r in reqs) or "(none)"
 
@@ -271,6 +278,7 @@ def analyze_traits(
     functional_requirements: list[dict],
     non_functional_requirements: list[dict],
     scenario: str | None = None,
+    reviewer_comment: str | None = None,
 ) -> dict:
     """
     Returns trait_details: {trait_key: {"score": int, "evidence": str, "reason": str}}
@@ -287,6 +295,8 @@ def analyze_traits(
         functional_list=_format_requirements(functional_requirements),
         non_functional_list=_format_requirements(non_functional_requirements),
     )
+    if reviewer_comment:  # approval action "regenerate": the reviewer can only influence the ratings
+        prompt += REVIEWER_NOTE.format(comment=reviewer_comment.strip())
     # Temperature 0: trait scores feed a deterministic scorer, so the same
     # requirements should produce the same scores as far as the model allows.
     ratings = generate_validated(prompt, TraitRatings, generate=generate_text, temperature=0)
@@ -299,6 +309,7 @@ def recommend_sdlc(
     functional_requirements: list[dict],
     non_functional_requirements: list[dict],
     scenario: str | None = None,
+    reviewer_comment: str | None = None,
 ) -> dict:
     """
     Full Agent 2 pipeline. Returns dict with:
@@ -307,7 +318,8 @@ def recommend_sdlc(
     why_not explanation for non-top models), recommended_model,
     is_close_call, justification (4 sections)
     """
-    trait_details = analyze_traits(domain, functional_requirements, non_functional_requirements, scenario)
+    trait_details = analyze_traits(domain, functional_requirements, non_functional_requirements, scenario,
+                                   reviewer_comment)
     flat_traits = {k: v["score"] for k, v in trait_details.items()}
 
     scored_models = score_models(flat_traits)

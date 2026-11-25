@@ -64,7 +64,7 @@ def test_open_issues_cover_quality_review_approvals_and_unverified_items():
 
 
 def test_open_issues_with_nothing_pending():
-    approved = {**REQUIREMENTS, "functional_requirements": [dict(r, approval_status="accepted", confidence="High")
+    approved = {**REQUIREMENTS, "functional_requirements": [dict(r, approval_status="approved", confidence="High")
                                                             for r in REQUIREMENTS["functional_requirements"]],
                 "non_functional_requirements": []}
     assert open_issues(approved, None, None, None, None, None) == []

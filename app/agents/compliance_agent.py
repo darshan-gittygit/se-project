@@ -95,6 +95,13 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
 """
 
 
+REVIEWER_NOTE = """
+
+A human reviewer asked for this to be regenerated, with this comment. Address it while following every rule above:
+{comment}
+"""
+
+
 def _format_requirements(reqs: list[dict]) -> str:
     return "\n".join(f"- {r['id']}: {r['requirement']}" for r in reqs) or "(none)"
 
@@ -167,7 +174,7 @@ def filter_considerations(considerations: list[dict], allowed_sources: set[str])
 
 
 def analyze_compliance(domain: str, functional_requirements: list[dict], non_functional_requirements: list[dict],
-                       scenario: str | None = None) -> dict:
+                       scenario: str | None = None, reviewer_comment: str | None = None) -> dict:
     requirements = functional_requirements + non_functional_requirements
     per_query = retrieve_many(build_queries(domain, requirements), top_k=TOP_K_PER_QUERY)
     merged = merge_retrieval(requirements, per_query)
@@ -194,6 +201,8 @@ def analyze_compliance(domain: str, functional_requirements: list[dict], non_fun
         retrieved_context=_format_retrieved_context(relevant),
         allowed_sources=", ".join(sources_used) or "(none)",
     )
+    if reviewer_comment:  # approval action "regenerate" (app/approvals.py)
+        prompt += REVIEWER_NOTE.format(comment=reviewer_comment.strip())
     # Schema check: risk_level enum, known requirement ids, and sources that
     # exist in the knowledge base at all (an invented name like "GDPR Article
     # 17" is invalid output and triggers the retry). A real source that was

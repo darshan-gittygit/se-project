@@ -131,26 +131,52 @@ class RequirementsOutput(_NonEmptyText):
         sources = _ctx(info, "source_texts")
         for prefix, reqs in (("FR", self.functional_requirements), ("NFR", self.non_functional_requirements)):
             for r in reqs:
-                bad_deps = [d for d in r.dependencies if d not in ids or d == r.id]
-                if bad_deps:
-                    raise ValueError(f"{r.id}: dependencies must be other requirement ids from this list, got {bad_deps}")
-                if r.source_text:
-                    if len(r.source_text.split()) < MIN_SOURCE_WORDS:
-                        raise ValueError(f"{r.id}: source_text must quote at least {MIN_SOURCE_WORDS} words")
-                    if sources is not None:
-                        quote = _normalise(r.source_text)
-                        origin = next((s for s in sources if quote in _normalise(s["text"])), None)
-                        if origin is None:
-                            raise ValueError(f"{r.id}: source_text is not an exact quote from the scenario "
-                                             f"or interview answers: {r.source_text!r}")
-                        if origin.get("role"):
-                            r.source_stakeholder = origin["role"]  # the person who actually said it
-                elif not r.assumptions:
-                    raise ValueError(f"{r.id}: give a source_text quote or list the assumptions it relies on")
-                r.type = prefix
-                r.confidence = _confidence(r)
-                r.approval_status = "proposed"
-                r.applicable_regulations = []
+                complete_requirement(r, prefix, ids, sources)
+        return self
+
+
+def complete_requirement(r: Requirement, prefix: str, ids: list[str], sources: list[dict] | None,
+                         status: str = "proposed") -> Requirement:
+    """
+    Checks one record against the rest of the list and the input texts, then
+    sets the code-owned fields. Shared by Agent 1, reviewer edits and
+    regeneration (app/approvals.py), so every version passes the same rules.
+    """
+    bad_deps = [d for d in r.dependencies if d not in ids or d == r.id]
+    if bad_deps:
+        raise ValueError(f"{r.id}: dependencies must be other requirement ids from this list, got {bad_deps}")
+    if r.source_text:
+        if len(r.source_text.split()) < MIN_SOURCE_WORDS:
+            raise ValueError(f"{r.id}: source_text must quote at least {MIN_SOURCE_WORDS} words")
+        if sources is not None:
+            quote = _normalise(r.source_text)
+            origin = next((s for s in sources if quote in _normalise(s["text"])), None)
+            if origin is None:
+                raise ValueError(f"{r.id}: source_text is not an exact quote from the scenario "
+                                 f"or interview answers: {r.source_text!r}")
+            if origin.get("role"):
+                r.source_stakeholder = origin["role"]  # the person who actually said it
+    elif not r.assumptions:
+        raise ValueError(f"{r.id}: give a source_text quote or list the assumptions it relies on")
+    r.type = prefix
+    r.confidence = _confidence(r)
+    r.approval_status = status
+    r.applicable_regulations = []
+    return r
+
+
+class RegeneratedRequirement(BaseModel):
+    """One requirement rewritten after a reviewer's comment (approval action "regenerate")."""
+    requirement: Requirement
+
+    @model_validator(mode="after")
+    def _same_id_and_grounded(self, info: ValidationInfo):
+        target = _ctx(info, "requirement_id")
+        if target and self.requirement.id != target:
+            raise ValueError(f"keep the requirement id {target!r}")
+        prefix = "NFR" if self.requirement.id.startswith("NFR") else "FR"
+        complete_requirement(self.requirement, prefix, _ctx(info, "all_ids") or [self.requirement.id],
+                             _ctx(info, "source_texts"))
         return self
 
 

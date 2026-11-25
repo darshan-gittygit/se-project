@@ -48,7 +48,11 @@ Note: the compliance result is displayed to the user but is not currently fed in
 | Scoring engine | `app/agents/sdlc_rules.py` | Deterministic scoring of 7 SDLC models on 15 traits, close-call detection, why-not explanations |
 | Artefact builders | `app/artefacts.py` | RTM, compliance-control matrix, assumptions/dependency register, open-issues list, all from existing data (no LLM) |
 | Artefact generator | `app/agents/artefact_agent.py` | User stories, use cases, process workflows, data and interface requirements (one LLM call; two above 20 requirements) |
-| SRS | `app/srs.py` | Document model rendered as Markdown and print-friendly HTML; in-memory store for downloads |
+| SRS | `app/srs.py` | Document model rendered as Markdown and print-friendly HTML, with the current approval state |
+| Storage | `app/db.py`, `app/runs.py` | SQLite (`data/app.db`): pipeline runs, approval items and versions, decisions, audit events |
+| Roles | `app/roles.py` | Role from the `X-Role` header (a stand-in) and the permission table |
+| Approvals | `app/approvals.py` | Accept, reject, modify, regenerate; versions; baseline freeze |
+| Audit log | `app/audit.py` | Append-only, SHA-256 hash-chained events; chain verifier |
 | Workflow generator | `app/agents/sdlc_workflows.py`, `workflow_agent.py` | Base phases per model (plain data, section 15 fields); one LLM call adds scenario-specific items |
 | RAG | `app/rag/` | Gemini embeddings, ChromaDB ingestion and retrieval |
 | Gemini client | `app/gemini_client.py` | Single place for model calls: backoff on 429, up to 4 attempts on 503 (2, 4, 8 s waits, at most 15 s), fallback across models on 404/empty; when every model fails the error lists each attempt; records which model answered (reported as `meta.model`) |
@@ -163,7 +167,38 @@ The artefact call's schema forbids extra fields at every level, requires known r
 
 The SRS (`app/srs.py`) is assembled by code from the pipeline result, with no LLM call: 17 sections (introduction and scope, stakeholders, functional and non-functional requirements with acceptance criteria, the five generated artefacts, compliance-control matrix, risk register, ranked SDLC recommendation, development workflow, RTM, assumptions and dependencies, open issues, approval status). Every requirement row and generated item shows its source stakeholder statement, or "no stakeholder statement; assumed: ..." when it rests on assumptions. The "Not a legal determination" notice appears at the top, in the compliance section and with the approval table, in which every item is proposed or pending. One document model is rendered both as Markdown and as self-contained HTML with print CSS, so the browser's Print -> Save as PDF produces a PDF; no Word or PDF library is used.
 
-Endpoints: `GET /agents/srs/{id}?format=markdown|html` serves the SRS of one of the last 20 pipeline runs (kept in server memory, lost on restart; the pipeline response gives the links); `POST /agents/srs?format=markdown|html` builds it from a saved pipeline result sent in the body, with a 400 if the body is not one.
+Endpoints: `GET /agents/srs/{id}?format=markdown|html` serves the SRS of a stored pipeline run with its current approval state (stored in SQLite, so it survives a restart; the pipeline response gives the links); `POST /agents/srs?format=markdown|html` builds it from a saved pipeline result sent in the body, with a 400 if the body is not one.
+
+## Persistence, roles, approvals and audit (problem statement sections 16, 17, 20)
+
+**Storage.** `data/app.db` (SQLite, standard library, gitignored, created on startup or first use; `REQUORA_DB_PATH` overrides the location and the tests use a temporary file). Tables: `runs` (the full pipeline result as generated, never edited; app and KB version; baseline state), `approval_items` (every version of every approvable item), `decisions` (every approval action) and `audit_events`. Database triggers abort any UPDATE or DELETE on `decisions` and `audit_events`. `/agents/pipeline` stores each successful run and returns its `run_id`; the SRS links use it.
+
+**Roles.** The caller's role comes from the `X-Role` header: business analyst, product owner, security officer, compliance officer, project manager, architect, auditor. This is a stand-in, not authentication: anyone can send any header. The permission table in `app/roles.py` is still enforced on every call:
+
+| Action | Allowed roles | Section 16 item |
+|---|---|---|
+| Run a stage or the pipeline | all except auditor (no header: allowed, logged as "unspecified", so the current UI keeps working) | - |
+| Review a requirement | business analyst, product owner | requirement approval |
+| Review a high-risk security requirement (category Security, risk level High) | security officer | high-risk security requirements |
+| Review a compliance interpretation | compliance officer | regulatory interpretations |
+| Review the SDLC selection | project manager, architect, security officer, compliance officer; approved only when all four accept the same version | SDLC selection |
+| Freeze the baseline | product owner, business analyst | final requirement baselines |
+| Read the audit log | auditor | - |
+
+The auditor role is read-only: every POST except building an SRS from a supplied body returns 403. Unknown roles get 400.
+
+**Approval items and actions.** Registered with each run (all mandatory): every requirement (`FR-1`), every domain-specific compliance mapping (`FR-1/kyc_aml`) and the SDLC selection (`sdlc`). `POST /runs/{id}/approvals` with `item_type`, `item_id`, `action`, `comment` (required except for accept) and `content` (for modify):
+
+- **accept / reject** act on the current version when it is `proposed` or `modified`, giving `approved` or `rejected`.
+- **modify** checks the changed fields with the same schemas as generated output (requirements: allowed values, quote grounding against the scenario, known dependencies; compliance: status and gap rules; SDLC: a known model, recorded as `human_override`) and creates a new version with status `modified`, which needs approval again. The old version becomes `superseded`. Changing an approved item works the same way ("changes to approved requirements").
+- **regenerate** re-runs one stage with the reviewer's comment added to the prompt: the requirement agent for one requirement (new single-record call, same rules), the compliance analysis for that requirement, or the SDLC trait rating (scoring stays deterministic). The new version is `proposed`. At most 3 regenerations per item; invalid LLM output gives a 502 and stores nothing.
+- **freeze** (`POST /runs/{id}/baseline/freeze`) succeeds only when every mandatory item's current version is `approved`; otherwise 409 with the blocking items. Any later modify or regenerate reopens the baseline and is logged.
+
+`GET /runs/{id}` shows every item's current version, status, history and (for the SDLC) who has accepted and who is still awaited; `GET /runs/{id}/result` and the SRS show the stored result with the current versions and statuses applied.
+
+**Audit log.** One event per pipeline stage (`stage_run`: SHA-256 and length of each prompt - never the prompt text - the model that answered, retrieved chunk ids for compliance, and the stage output), per generated artefact (ids and a hash), per approval action (role, comment, status after, new version), per baseline freeze, block or reopen, per SRS download, per failed stage or regeneration, and per audit read. Every event has a timestamp, role, KB version (a hash of the knowledge-base files) and app version. Each row stores the previous row's hash and its own hash over its content, so `verify_chain()` finds the first changed, removed or reordered row; `GET /audit` (auditor only, filters `run_id`, `role`, `action`) returns the events and the verification result. There are no update or delete routes.
+
+**What real authentication would add (not built).** Sign-in through the organisation's identity provider (OIDC or SAML) with MFA, roles taken from identity-provider groups instead of a header, server-side sessions with expiry, TLS everywhere, encryption of the database at rest and key management, a separate duty rule so the person who modifies an item cannot approve it, and a retention policy for audit events (which contain stage outputs and therefore personal data from the scenario).
 
 ## Compliance retrieval
 
@@ -263,7 +298,8 @@ Whatever the LLM sends for the code-set fields is overwritten, so it cannot appr
 - Adding six traits dilutes the defining traits of each model. The hand-written food-delivery test vector (V&V 2, criticality 3) now picks Agile-V (87.6) over DevSecOps (85.7), although Agile-V is defined by criticality 5 and V&V 5: those two traits carry 2.1 of the 14.7 total weight, and Agile-V matches the vector on most new traits. Results for mid-range projects can therefore sit in a close cluster of DevSecOps, Agile-V and Incremental; the close-call flag shows this.
 - The six new traits have not been extracted live yet (quota); their reference values are hand ratings.
 - Generated stories, use cases, workflows, data and interface requirements are checked for structure and links only; they are listed as an open issue until someone reviews them. The SRS download store is in memory (last 20 runs).
-- A full pipeline run is now 8 LLM calls, which uses the free-tier quota quickly.
+- A full pipeline run is now 8 LLM calls, which uses the free-tier quota quickly (`?artefacts=false` saves one).
+- The role header is trusted as sent, and the same role may modify and then approve an item; both need real authentication and a separation-of-duties rule. The audit log stores stage outputs, which can contain personal data, and there is no retention policy yet. SQLite suits a single server process.
 - Workflow additions are LLM output checked only for structure (existing phase, field, known ids, no repeats); whether an addition is sensible is not measured.
 - Compliance `status`, the required control and the risk register's likelihood and impact are LLM judgements, checked only for allowed values and (for evidence) quotes; their accuracy is not measured. The confidence bands come from a small single-labeller tuning set.
 - No confidence percentages are shown, because none are computed.

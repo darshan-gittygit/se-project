@@ -11,6 +11,9 @@ venv/
 # generated vector store - rebuild with: python -m app.rag.ingest
 chroma_db/
 
+# local database (pipeline runs, approvals, audit log)
+data/
+
 # misc
 *.db
 .DS_Store

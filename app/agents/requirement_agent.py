@@ -14,7 +14,7 @@ the few-shot example and strict schema instructions in the prompt are for.
 import json
 
 from app.gemini_client import generate_text
-from app.schemas import RequirementsOutput, generate_validated
+from app.schemas import RegeneratedRequirement, RequirementsOutput, generate_validated
 from app.vocabulary import REQUIREMENT_CATEGORIES, STAKEHOLDER_ROLES
 
 PROMPT_TEMPLATE = """You are a senior business analyst specializing in software requirements engineering.
@@ -123,3 +123,36 @@ def extract_requirements(scenario: str, answers: list[dict] | None = None) -> di
         context={"source_texts": source_texts},
     )
     return result.model_dump()
+
+
+REGENERATE_TEMPLATE = """You are a senior business analyst. A reviewer asked you to rewrite one requirement record.
+
+Scenario: "{scenario}"
+
+All requirement ids in this specification: {ids}
+
+Current record (JSON):
+{record}
+
+Reviewer comment:
+{comment}
+
+Rewrite the record to address the comment, following the same rules as before: keep the id {rid}; one clear, testable sentence; categories from {categories}; source_stakeholder from {roles}; source_text must be an exact quote (at least 2 words) from the scenario, or "" with the assumptions listed; any number the scenario does not state goes into assumptions; dependencies only to other ids in the list.
+
+Respond with ONLY valid JSON, no markdown fences, in exactly this schema:
+{{"requirement": {{...the full record with the same fields as the current one...}}}}
+"""
+
+
+def regenerate_requirement(record: dict, comment: str, scenario: str, all_ids: list[str]) -> dict:
+    """Approval action "regenerate" for one requirement: one validated LLM call, same rules as Agent 1."""
+    editable = {k: v for k, v in record.items()
+                if k not in ("type", "confidence", "approval_status", "applicable_regulations")}
+    prompt = REGENERATE_TEMPLATE.format(
+        scenario=scenario.strip(), ids=", ".join(all_ids), record=json.dumps(editable, indent=1),
+        comment=comment.strip(), rid=record["id"], categories=", ".join(REQUIREMENT_CATEGORIES),
+        roles=", ".join(STAKEHOLDER_ROLES))
+    out = generate_validated(prompt, RegeneratedRequirement, generate=generate_text, temperature=0.2,
+                             context={"requirement_id": record["id"], "all_ids": all_ids,
+                                      "source_texts": [{"text": scenario, "role": None}]})
+    return out.model_dump()["requirement"]

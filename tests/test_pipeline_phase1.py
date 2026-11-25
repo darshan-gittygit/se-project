@@ -81,7 +81,7 @@ def test_pipeline_returns_records_regulations_and_quality(mocked):
     mocked()
     d = client.post("/agents/pipeline", json={"scenario": SCENARIO}).json()
     assert {"scenario", "requirements", "compliance", "compliance_mapping", "quality", "risk_register",
-            "sdlc_recommendation", "sdlc_workflow", "artefacts", "srs", "meta"} == set(d)
+            "sdlc_recommendation", "sdlc_workflow", "artefacts", "srs", "run_id", "meta"} == set(d)
     fr1, fr2 = d["requirements"]["functional_requirements"]
     (nfr1,) = d["requirements"]["non_functional_requirements"]
     # domain-specific citations only; the generic baseline is not a regulation

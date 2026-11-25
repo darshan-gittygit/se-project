@@ -14,6 +14,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 KNOWLEDGE_BASE_DIR = PROJECT_ROOT / "knowledge_base"
 CHROMA_PATH = PROJECT_ROOT / "chroma_db"
 STATIC_DIR = PROJECT_ROOT / "app" / "static"
+# SQLite database for pipeline runs, approvals and the audit log. Created on
+# first use; gitignored. REQUORA_DB_PATH overrides it (the tests use a temp file).
+DB_PATH = Path(os.environ.get("REQUORA_DB_PATH", str(PROJECT_ROOT / "data" / "app.db")))
+
+# Recorded in every audit event. Bump it when behaviour changes.
+APP_VERSION = "0.5.0"
 
 load_dotenv(PROJECT_ROOT / ".env")  # reads .env from the project root if present
 
