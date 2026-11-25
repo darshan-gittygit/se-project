@@ -1,0 +1,16 @@
+# secrets and local config
+.env
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# generated vector store - rebuild with: python -m app.rag.ingest
+chroma_db/
+
+# misc
+*.db
+.DS_Store

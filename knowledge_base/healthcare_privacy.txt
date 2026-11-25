@@ -1,0 +1,26 @@
+Healthcare Data Privacy Principles
+
+Systems that handle patient health information - medical records, diagnoses,
+prescriptions, appointment or consultation data - are generally expected to
+follow a stricter privacy standard than typical personal data, commonly
+summarized under frameworks like HIPAA (in the US) or equivalent health-data
+provisions within broader data protection laws elsewhere.
+
+Core expectations typically include: restricting access to patient records to
+authorized clinical staff on a need-to-know basis, maintaining an audit trail of
+who accessed a patient's record and when, encrypting health data both at rest and
+in transit, and obtaining explicit patient consent before sharing health data
+with third parties (insurers, other providers, researchers).
+
+Telehealth and remote-consultation systems carry additional expectations: video
+or audio consultation streams should be encrypted end-to-end where feasible,
+session recordings (if any) should be subject to the same access controls as
+written records, and patients should be clearly informed about how their
+consultation data is stored and for how long.
+
+A system handling patient health data should typically include: role-based access
+control limited to relevant clinical staff, encryption of records and any
+video/audio streams, an access audit log, and an explicit consent step before
+data is shared externally. Systems that allow broad, unrestricted staff access to
+patient records or store consultation data without encryption would generally be
+considered high-risk from a healthcare privacy standpoint.

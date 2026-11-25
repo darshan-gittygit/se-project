@@ -1,0 +1,29 @@
+General Security and Privacy Baseline (Domain-Agnostic)
+
+Regardless of industry, most modern software systems that handle user accounts,
+personal data, or business-critical operations are expected to meet a baseline
+set of security and privacy practices, independent of any specific regulatory
+framework.
+
+This baseline typically includes: authenticating users before granting access to
+their data or account (password, multi-factor authentication, or equivalent),
+encrypting sensitive data both in transit (e.g. via TLS) and at rest, applying
+role-based access control so that users and staff can only access what their role
+requires, and maintaining audit logs for security-relevant actions (logins,
+permission changes, data exports, administrative actions).
+
+Systems should also follow the principle of least privilege - granting the
+minimum level of access needed for a user or component to perform its function -
+and should have a plan for how security incidents (breaches, unauthorized
+access attempts) are detected and responded to, rather than assuming they will
+not occur.
+
+Availability and reliability expectations, while not always a formal "compliance"
+requirement, are commonly treated as part of a system's duty of care to its
+users - especially for systems where downtime could cause real harm (financial
+loss, safety risk, service denial). A reasonable baseline is documented uptime
+targets, monitoring, and a defined incident-response process.
+
+Any system - regardless of domain - that lacks authentication, uses unencrypted
+storage or transmission of user data, or has no access logging would generally be
+considered to fall below a reasonable security and privacy baseline.

@@ -1,0 +1,27 @@
+Fair Lending and Responsible Credit Assessment Principles
+
+Credit and lending systems are generally expected to base approval and pricing
+decisions on objective, disclosed criteria rather than protected characteristics
+such as religion, caste, gender, or ethnicity. Regulators in most jurisdictions,
+including India's fair practices guidance for banks and NBFCs, expect lenders to
+be able to explain the basis for a credit decision if challenged - a system that
+produces a rejection with no explainable reasoning is generally considered a
+compliance and fairness risk, not just a UX shortcoming.
+
+Responsible lending principles typically require that a system assess a
+borrower's actual repayment capacity (income, existing obligations, credit
+history) rather than approving credit based on incomplete information, and that
+loan terms, interest rates, and fees be disclosed clearly before the borrower
+commits.
+
+Automated or algorithmic credit-scoring components carry additional expectations:
+the scoring logic should be periodically reviewed for disparate impact on
+protected groups, and borrowers who are declined should generally receive a
+reason for the decision, not just a rejection notice.
+
+A digital lending system should typically include: a documented, explainable
+credit-scoring methodology, disclosure of all loan terms before commitment, a
+process for borrowers to request the reason for a declined application, and
+periodic review of automated decisions for fairness. Systems using an
+unexplainable "black box" credit decision with no borrower recourse would
+generally be considered high-risk under fair lending expectations.

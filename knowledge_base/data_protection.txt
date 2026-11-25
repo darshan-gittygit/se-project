@@ -1,0 +1,28 @@
+Data Protection and Privacy Principles
+
+Modern data protection frameworks (such as India's Digital Personal Data Protection
+Act and comparable frameworks elsewhere) are generally built around a common set of
+principles: collect only the personal data actually needed for the stated purpose
+(data minimization), obtain meaningful consent before collecting or processing
+personal data, and give individuals the ability to access, correct, or request
+deletion of their data.
+
+Systems that process personal data - names, contact details, financial information,
+health records, government identity numbers - are typically expected to: state
+clearly what data is being collected and why, avoid using the data for purposes
+beyond what was disclosed, protect the data with reasonable technical safeguards
+(encryption in transit and at rest, access controls), and notify affected
+individuals and, in many frameworks, a regulator, in the event of a data breach.
+
+Sensitive personal data - health information, financial account details, biometric
+data, government ID numbers - usually warrants a higher standard of protection than
+general personal data, including stricter access controls and, in many frameworks,
+explicit rather than implied consent.
+
+A well-designed software system handling personal data should generally include:
+a documented lawful basis or consent step before data collection, encryption of
+data at rest and in transit, role-based access control so only authorized staff or
+systems can view sensitive fields, and a data retention policy rather than
+indefinite storage. Systems that collect more personal data than necessary for
+their stated purpose, or that lack basic encryption and access controls, are
+generally considered to carry elevated compliance and privacy risk.

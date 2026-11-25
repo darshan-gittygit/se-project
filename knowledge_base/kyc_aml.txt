@@ -1,0 +1,28 @@
+Know Your Customer (KYC) and Anti-Money Laundering (AML) Principles
+
+Financial institutions offering account opening, lending, or payment services are
+generally expected to verify the identity of a customer before establishing a
+business relationship. This typically involves collecting and validating official
+identity documents, proof of address, and, for certain products, proof of income
+or financial standing.
+
+Systems that onboard customers for loans or other credit products should capture
+enough identity and background information to support a risk-based assessment -
+higher-risk customers or transaction patterns typically warrant deeper verification
+("enhanced due diligence"), while lower-risk, well-documented customers may go
+through a simpler process.
+
+AML principles require institutions to monitor transactions for patterns that could
+indicate money laundering or fraud - for example, unusually large transactions,
+rapid movement of funds, or structuring transactions to avoid reporting thresholds.
+Systems handling financial transactions are generally expected to log transaction
+details in a way that supports later audit and investigation, and to flag
+suspicious patterns for human review rather than silently allowing them.
+
+A digital loan origination or account-opening system should therefore typically
+include: identity document capture and verification, address verification, a
+risk-scoring step to classify customer risk level, and an audit trail of
+verification decisions. Systems that skip identity verification entirely, or that
+do not retain verification records, would generally be considered non-compliant
+with standard KYC/AML expectations in most jurisdictions, including India's
+regulatory environment for banks and NBFCs.

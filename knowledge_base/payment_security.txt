@@ -1,0 +1,26 @@
+Payment and Cardholder Data Security Principles
+
+Systems that store, process, or transmit payment card information are generally
+expected to follow industry security standards commonly summarized as: never store
+full card verification codes after transaction authorization, encrypt cardholder
+data both in transit and at rest, restrict access to payment data on a
+strict need-to-know basis, and maintain detailed logs of who accessed payment data
+and when.
+
+Best practice is to avoid storing raw card numbers wherever possible - using
+tokenization (replacing the card number with a non-sensitive token) or delegating
+card storage entirely to a certified third-party payment processor is generally
+preferred over building in-house card storage.
+
+Systems should also implement transaction-level safeguards: enforcing secure
+communication protocols (such as TLS) for any payment-related network traffic,
+rate-limiting or flagging repeated failed payment attempts (a common fraud
+indicator), and providing users with a clear transaction receipt or confirmation
+record.
+
+A system that directly handles payments should typically include: encrypted
+transmission of payment details, tokenization or delegation to a compliant payment
+processor rather than raw card storage, fraud-pattern monitoring on transactions,
+and a transaction audit log. Systems that store raw, unencrypted card numbers or
+lack any fraud monitoring would generally be considered high-risk from a payment
+security standpoint.
