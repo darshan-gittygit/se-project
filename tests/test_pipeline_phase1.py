@@ -9,10 +9,11 @@ import app.agents.quality_agent as quality_mod
 import app.agents.requirement_agent as req_mod
 import app.agents.risk_agent as risk_mod
 import app.agents.workflow_agent as workflow_mod
+import app.agents.artefact_agent as artefact_mod
 import app.agents.sdlc_agent as sdlc_mod
 from app.agents.compliance_agent import attach_regulations
 from app.main import app
-from tests.helpers import RISK_PROMPT_MARKER, WORKFLOW_PROMPT_MARKER, record, risk_reply
+from tests.helpers import ARTEFACT_PROMPT_MARKER, RISK_PROMPT_MARKER, WORKFLOW_PROMPT_MARKER, artefact_reply, record, risk_reply
 
 client = TestClient(app)
 SCENARIO = "A digital loan origination system that verifies applicant identity documents and explains credit decisions."
@@ -51,6 +52,8 @@ def router(conflicts=CONFLICTS, seen=None):
             return risk_reply()
         if WORKFLOW_PROMPT_MARKER in prompt:
             return json.dumps({"additions": []})
+        if ARTEFACT_PROMPT_MARKER in prompt:
+            return artefact_reply(("FR-1", "FR-2"))
         if "rating project characteristics" in prompt:
             return json.dumps(TRAITS)
         return json.dumps(JUSTIFICATION)
@@ -63,7 +66,7 @@ def mocked(monkeypatch):
 
     def install(conflicts=CONFLICTS):
         fake = router(conflicts, seen)
-        for mod in (req_mod, comp_mod, quality_mod, risk_mod, sdlc_mod, workflow_mod):
+        for mod in (req_mod, comp_mod, quality_mod, risk_mod, sdlc_mod, workflow_mod, artefact_mod):
             monkeypatch.setattr(mod, "generate_text", fake)
         monkeypatch.setattr(comp_mod, "retrieve_many", lambda qs, top_k=3: [[
             {"id": "kyc_aml-0", "source": "kyc_aml", "text": "KYC", "distance": 0.40},
@@ -78,7 +81,7 @@ def test_pipeline_returns_records_regulations_and_quality(mocked):
     mocked()
     d = client.post("/agents/pipeline", json={"scenario": SCENARIO}).json()
     assert {"scenario", "requirements", "compliance", "compliance_mapping", "quality", "risk_register",
-            "sdlc_recommendation", "sdlc_workflow", "meta"} == set(d)
+            "sdlc_recommendation", "sdlc_workflow", "artefacts", "srs", "meta"} == set(d)
     fr1, fr2 = d["requirements"]["functional_requirements"]
     (nfr1,) = d["requirements"]["non_functional_requirements"]
     # domain-specific citations only; the generic baseline is not a regulation

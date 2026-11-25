@@ -22,10 +22,12 @@ flowchart LR
     F --> W[Workflow generator<br/>base phases + scenario additions]
     M -.-> W
     R -.-> W
+    W --> G[Artefacts<br/>LLM: stories, use cases, workflows, data, interfaces<br/>code: RTM, control matrix, registers, open issues]
+    G --> S[SRS<br/>Markdown + print-friendly HTML]
     C -. shown as Stage 2 in the UI .-> F
 ```
 
-In the UI the stages run as three separate calls: `/agents/requirements`, `/agents/compliance`, `/agents/sdlc`. The interview (`/agents/interview`, `/agents/interview/templates`) and quality check (`/agents/quality`) are API-only for now. `/agents/pipeline` runs requirements -> compliance (+ mapping) -> quality -> risk register -> SDLC -> workflow in one request (7 LLM calls) and returns all of them, with `compliance_mapping`, `risk_register` and `sdlc_workflow` as top-level keys; it accepts the same optional interview `answers` as `/agents/requirements`.
+In the UI the stages run as three separate calls: `/agents/requirements`, `/agents/compliance`, `/agents/sdlc`. The interview (`/agents/interview`, `/agents/interview/templates`) and quality check (`/agents/quality`) are API-only for now. `/agents/pipeline` runs requirements -> compliance (+ mapping) -> quality -> risk register -> SDLC -> workflow -> artefacts in one request (8 LLM calls; 9 with more than 20 requirements) and returns all of them, with `compliance_mapping`, `risk_register`, `sdlc_workflow`, `artefacts` and `srs` (download links) as top-level keys; it accepts the same optional interview `answers` as `/agents/requirements`.
 
 Note: the compliance result is displayed to the user but is not currently fed into the SDLC trait extraction. Both agents work from the same requirement list. Feeding compliance findings into criticality/verification scoring is a possible future improvement.
 
@@ -44,6 +46,9 @@ Note: the compliance result is displayed to the user but is not currently fed in
 | Output schemas | `app/schemas.py` (+ interview/quality modules) | Pydantic schemas for every LLM reply; validate, retry once, else 502 |
 | SDLC agent | `app/agents/sdlc_agent.py` | Rubric-anchored trait extraction (with evidence), call scoring engine, write justification |
 | Scoring engine | `app/agents/sdlc_rules.py` | Deterministic scoring of 7 SDLC models on 15 traits, close-call detection, why-not explanations |
+| Artefact builders | `app/artefacts.py` | RTM, compliance-control matrix, assumptions/dependency register, open-issues list, all from existing data (no LLM) |
+| Artefact generator | `app/agents/artefact_agent.py` | User stories, use cases, process workflows, data and interface requirements (one LLM call; two above 20 requirements) |
+| SRS | `app/srs.py` | Document model rendered as Markdown and print-friendly HTML; in-memory store for downloads |
 | Workflow generator | `app/agents/sdlc_workflows.py`, `workflow_agent.py` | Base phases per model (plain data, section 15 fields); one LLM call adds scenario-specific items |
 | RAG | `app/rag/` | Gemini embeddings, ChromaDB ingestion and retrieval |
 | Gemini client | `app/gemini_client.py` | Single place for model calls: backoff on 429, up to 4 attempts on 503 (2, 4, 8 s waits, at most 15 s), fallback across models on 404/empty; when every model fails the error lists each attempt; records which model answered (reported as `meta.model`) |
@@ -142,6 +147,24 @@ Reasoning for the Phase 3 values (fixed before any results were computed, not tu
 
 `sdlc_workflow` (pipeline only) customises the recommended model. Its base phases come from plain data in `app/agents/sdlc_workflows.py`: 4-7 phases per model, each with the ten section-15 fields (`activities`, `responsible_roles`, `deliverables`, `security_activities`, `testing_requirements`, `compliance_checkpoints`, `approval_gates`, `entry_criteria`, `exit_criteria`, `traceability_requirements`). Approval gates follow section 16's mandatory approvals; every model has a production-readiness gate. One LLM call (`workflow_agent.py`) sees the requirements, compliance gaps/checkpoints and top risks and may only add items: each addition names an existing phase (renamed or invented phases fail validation), one of the ten fields, a short item, the requirement ids it serves and a reason. Additions that repeat a base item, unknown ids and more than 25 additions are rejected; retry once, then 502. Every item in the result is `{"text", "source": "base" | "scenario", "requirement_ids"}`.
 
+## Requirement artefacts and SRS (problem statement section 12)
+
+`artefacts` in the pipeline response holds all eleven section-12 artefacts except the SRS itself and the risk register (which has its own key):
+
+| Artefact | Built by | Links |
+|---|---|---|
+| `user_stories` (with Given/When/Then acceptance criteria), `use_cases`, `process_workflows`, `data_requirements`, `interface_requirements` | one LLM call (`artefact_agent.py`) | each item lists its requirement ids; code assigns `US-1`, `UC-1`, `PW-1`, `DR-1`, `IR-1`, writes the story sentence and attaches `source_statements` |
+| `traceability_matrix` | code | requirement -> source stakeholder statement -> compliance sources (satisfied/gap) -> risk ids -> story, use-case, workflow, data and interface ids -> workflow items |
+| `compliance_control_matrix` | code | one row per requirement x knowledge-base source, from `compliance_mapping` |
+| `assumptions_register` | code | project and per-requirement assumptions (identical texts merged, with the requirement ids that rely on them) and the dependencies between requirements |
+| `open_issues` | code | quality flags, compliance review reasons, requirements and the SDLC choice awaiting approval, close calls, assumption-only requirements, and LLM-generated items nobody has reviewed |
+
+The artefact call's schema forbids extra fields at every level, requires known requirement ids on every item, requires at least one user story per functional requirement and one use case, and restricts interface types to the classic SRS kinds (user, hardware, software, communications). Retry once, then 502. Above 20 requirements the call is split in two (stories + use cases; workflows + data + interfaces) so no single response gets too long; `artefacts.generation` records which happened. For a typical 7-9 requirement scenario the full output is roughly 2,500 tokens, so one call is used.
+
+The SRS (`app/srs.py`) is assembled by code from the pipeline result, with no LLM call: 17 sections (introduction and scope, stakeholders, functional and non-functional requirements with acceptance criteria, the five generated artefacts, compliance-control matrix, risk register, ranked SDLC recommendation, development workflow, RTM, assumptions and dependencies, open issues, approval status). Every requirement row and generated item shows its source stakeholder statement, or "no stakeholder statement; assumed: ..." when it rests on assumptions. The "Not a legal determination" notice appears at the top, in the compliance section and with the approval table, in which every item is proposed or pending. One document model is rendered both as Markdown and as self-contained HTML with print CSS, so the browser's Print -> Save as PDF produces a PDF; no Word or PDF library is used.
+
+Endpoints: `GET /agents/srs/{id}?format=markdown|html` serves the SRS of one of the last 20 pipeline runs (kept in server memory, lost on restart; the pipeline response gives the links); `POST /agents/srs?format=markdown|html` builds it from a saved pipeline result sent in the body, with a 400 if the body is not one.
+
 ## Compliance retrieval
 
 1. One query per requirement (the requirement text), embedded in one batch; top 3 chunks each.
@@ -239,6 +262,8 @@ Whatever the LLM sends for the code-set fields is overwritten, so it cannot appr
 - In the Phase 2 live loan run, 4 of 8 requirements were flagged for review, all because their best match fell in the then-Low band 0.55-0.62, although the matches were correct (e.g. fair_lending for decline reasons at 0.58). The tuning data showed every citable pair in that range was correct, so Medium was widened to 0.60; re-grading that run's saved mapping gives 1 of 8 (only the 0.62 audit-log match). The evidence is 7 labelled pairs from one labeller.
 - Adding six traits dilutes the defining traits of each model. The hand-written food-delivery test vector (V&V 2, criticality 3) now picks Agile-V (87.6) over DevSecOps (85.7), although Agile-V is defined by criticality 5 and V&V 5: those two traits carry 2.1 of the 14.7 total weight, and Agile-V matches the vector on most new traits. Results for mid-range projects can therefore sit in a close cluster of DevSecOps, Agile-V and Incremental; the close-call flag shows this.
 - The six new traits have not been extracted live yet (quota); their reference values are hand ratings.
+- Generated stories, use cases, workflows, data and interface requirements are checked for structure and links only; they are listed as an open issue until someone reviews them. The SRS download store is in memory (last 20 runs).
+- A full pipeline run is now 8 LLM calls, which uses the free-tier quota quickly.
 - Workflow additions are LLM output checked only for structure (existing phase, field, known ids, no repeats); whether an addition is sensible is not measured.
 - Compliance `status`, the required control and the risk register's likelihood and impact are LLM judgements, checked only for allowed values and (for evidence) quotes; their accuracy is not measured. The confidence bands come from a small single-labeller tuning set.
 - No confidence percentages are shown, because none are computed.

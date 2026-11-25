@@ -9,7 +9,7 @@ from google.genai import errors as genai_errors
 
 import app.gemini_client as gc
 from app.main import MAX_SCENARIO_CHARS, MAX_REQUIREMENTS_PER_LIST, app
-from tests.helpers import RISK_PROMPT_MARKER, WORKFLOW_PROMPT_MARKER, record, risk_reply
+from tests.helpers import ARTEFACT_PROMPT_MARKER, RISK_PROMPT_MARKER, WORKFLOW_PROMPT_MARKER, artefact_reply, record, risk_reply
 
 client = TestClient(app)
 PRIMARY, FALLBACK = gc._candidate_models()[0], gc._candidate_models()[1]
@@ -44,6 +44,8 @@ def reply_for(prompt):
         return risk_reply()
     if WORKFLOW_PROMPT_MARKER in prompt:
         return json.dumps({"additions": []})
+    if ARTEFACT_PROMPT_MARKER in prompt:
+        return artefact_reply(("FR-1",))
     if "rating project characteristics" in prompt:
         return json.dumps(TRAITS)
     return json.dumps(JUSTIFICATION)
@@ -94,7 +96,7 @@ def test_pipeline_has_meta_for_all_calls(fake_sdk, monkeypatch):
         json.dumps({"risk_level": "Low", "considerations": [], "summary": "s"})
         if "compliance and risk analyst" in prompt else reply_for(prompt))
     d = client.post("/agents/pipeline", json={"scenario": "A payroll system for a company"}).json()
-    assert d["meta"]["models_used"] == [PRIMARY] * 7  # requirements, compliance, conflicts, risks, traits, justification, workflow
+    assert d["meta"]["models_used"] == [PRIMARY] * 8  # requirements, compliance, conflicts, risks, traits, justification, workflow, artefacts
     assert {"scenario", "requirements", "compliance", "compliance_mapping", "quality", "risk_register",
             "sdlc_recommendation", "sdlc_workflow"} <= set(d)
 

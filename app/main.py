@@ -8,9 +8,9 @@ Wiring check for the Gemini key and model: python -m app.gemini_client
 (the old unauthenticated /test-gemini route was removed - anyone who could
 reach the server could spend the API quota with it).
 """
-from fastapi import FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -26,6 +26,9 @@ from app.agents.quality_agent import analyze_quality
 from app.agents.risk_agent import build_risk_register
 from app.agents.workflow_agent import generate_workflow
 from app.agents.sdlc_agent import recommend_sdlc
+from app.agents.artefact_agent import generate_artefacts
+from app.artefacts import build_code_artefacts
+from app.srs import SrsStore, build_blocks, render_html, render_markdown
 
 app = FastAPI(title="Requora AI - Requirements Engineering & SDLC Recommendation API")
 
@@ -240,7 +243,10 @@ def run_full_pipeline(body: ScenarioRequest):
     Order: requirements -> compliance + per-requirement compliance mapping
     (then each requirement's applicable_regulations is filled from the
     domain-specific sources cited for it) -> quality checks -> risk register
-    -> SDLC recommendation -> workflow for the recommended model. 7 LLM calls.
+    -> SDLC recommendation -> workflow for the recommended model -> section 12
+    artefacts (1 LLM call, 2 for more than 20 requirements) and code-built
+    matrices/registers. 8 LLM calls. The result is kept in memory so its SRS
+    can be downloaded from GET /agents/srs/{id}.
     """
     _check_scenario(body.scenario)
     answers = _check_answers(body.answers)
@@ -302,7 +308,15 @@ def run_full_pipeline(body: ScenarioRequest):
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"Workflow generator failed: {e}")
 
-    return {
+        try:
+            generated = generate_artefacts(requirements, body.scenario)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Artefact generator failed: {e}")
+
+    generation = generated.pop("generation")
+    code_built = build_code_artefacts(requirements, compliance_mapping, risk_register, quality_result,
+                                      sdlc_result, sdlc_workflow, generated)
+    result = {
         "scenario": body.scenario,
         "requirements": requirements,
         "compliance": compliance_result,
@@ -311,8 +325,56 @@ def run_full_pipeline(body: ScenarioRequest):
         "risk_register": risk_register,
         "sdlc_recommendation": sdlc_result,
         "sdlc_workflow": sdlc_workflow,
+        "artefacts": {**generated, **code_built, "generation": generation},
         "meta": _meta(used),
     }
+    srs_id = SRS_STORE.put(result)
+    result["srs"] = {
+        "id": srs_id,
+        "markdown_url": f"/agents/srs/{srs_id}?format=markdown",
+        "html_url": f"/agents/srs/{srs_id}?format=html",
+        "note": f"Kept in server memory for the last {SRS_STORE.capacity} pipeline runs and lost on restart; "
+                "POST /agents/srs with a saved pipeline result works any time.",
+    }
+    return result
+
+
+# --- SRS download (no LLM call) -------------------------------------------------
+
+SRS_STORE = SrsStore(capacity=20)
+SrsFormat = Literal["markdown", "html"]
+
+
+def _srs_response(result: dict, fmt: str, name: str):
+    blocks = build_blocks(result)
+    if fmt == "html":
+        return HTMLResponse(render_html(blocks))
+    return Response(render_markdown(blocks), media_type="text/markdown; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="requora-srs-{name}.md"'})
+
+
+@app.get("/agents/srs/{srs_id}")
+def get_srs(srs_id: str, format: SrsFormat = Query("markdown")):
+    """The SRS of a recent /agents/pipeline run, as a Markdown download or a print-friendly HTML page."""
+    result = SRS_STORE.get(srs_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Unknown or expired SRS id. Run /agents/pipeline again, "
+                                                    "or POST the saved pipeline result to /agents/srs.")
+    return _srs_response(result, format, srs_id)
+
+
+@app.post("/agents/srs")
+def post_srs(result: dict = Body(...), format: SrsFormat = Query("markdown")):
+    """Builds the SRS from a /agents/pipeline result sent in the body (no LLM call)."""
+    req = result.get("requirements")
+    if not isinstance(req, dict) or not all(isinstance(req.get(k), list) for k in
+                                            ("functional_requirements", "non_functional_requirements")):
+        raise HTTPException(status_code=400, detail="Body must be a /agents/pipeline result with "
+                                                    "requirements.functional_requirements and non_functional_requirements.")
+    try:
+        return _srs_response(result, format, "document")
+    except (KeyError, TypeError, AttributeError) as e:
+        raise HTTPException(status_code=400, detail=f"Pipeline result is missing or has malformed fields: {e}")
 
 
 # Serve the demo web UI

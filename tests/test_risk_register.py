@@ -128,7 +128,7 @@ def test_pipeline_risk_step_retries_then_502(monkeypatch):
 def test_pipeline_lifts_compliance_mapping_to_the_top_level(monkeypatch):
     import tests.test_pipeline_phase1 as p1
     fake = p1.router()
-    for mod in (p1.req_mod, p1.comp_mod, p1.quality_mod, p1.sdlc_mod, ra, p1.workflow_mod):
+    for mod in (p1.req_mod, p1.comp_mod, p1.quality_mod, p1.sdlc_mod, ra, p1.workflow_mod, p1.artefact_mod):
         monkeypatch.setattr(mod, "generate_text", fake)
     monkeypatch.setattr(p1.comp_mod, "retrieve_many", lambda qs, top_k=3: [[] for _ in qs])
     d = client.post("/agents/pipeline", json={"scenario": p1.SCENARIO}).json()

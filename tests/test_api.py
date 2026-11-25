@@ -15,8 +15,9 @@ import app.agents.sdlc_agent as sdlc_mod
 import app.agents.quality_agent as quality_mod
 import app.agents.risk_agent as risk_mod
 import app.agents.workflow_agent as workflow_mod
+import app.agents.artefact_agent as artefact_mod
 from app.main import app
-from tests.helpers import RISK_PROMPT_MARKER, WORKFLOW_PROMPT_MARKER, record, risk_reply
+from tests.helpers import ARTEFACT_PROMPT_MARKER, RISK_PROMPT_MARKER, WORKFLOW_PROMPT_MARKER, artefact_reply, record, risk_reply
 
 REQS = {
     "domain_inferred": "Payroll Processing System",
@@ -72,12 +73,14 @@ def fake_llm(prompt, temperature=0.3):
         return risk_reply()
     if WORKFLOW_PROMPT_MARKER in prompt:
         return json.dumps({"additions": []})
+    if ARTEFACT_PROMPT_MARKER in prompt:
+        return artefact_reply(("FR-1", "FR-2"))
     raise AssertionError("unexpected prompt: " + prompt[:80])
 
 
 @pytest.fixture(autouse=True)
 def mock_llm(monkeypatch):
-    for mod in (req_mod, comp_mod, sdlc_mod, quality_mod, risk_mod, workflow_mod):
+    for mod in (req_mod, comp_mod, sdlc_mod, quality_mod, risk_mod, workflow_mod, artefact_mod):
         monkeypatch.setattr(mod, "generate_text", fake_llm)
     monkeypatch.setattr(comp_mod, "retrieve_many", lambda queries, top_k=3: [[
         {"id": "data_protection-0", "text": "DP text", "source": "data_protection", "distance": 0.3},

@@ -18,12 +18,15 @@ Built by Darshan - NIT Karnataka, Surathkal (CS305 Software Engineering course p
 2. **Agent 3 (compliance and risk):** runs one retrieval query per requirement against the knowledge base in `knowledge_base/` (ChromaDB + Gemini embeddings) and passes only chunks under a tuned distance threshold to the LLM. Whether the knowledge base covers the domain (`kb_relevance`) is computed from those distances using domain-specific sources only; the domain-agnostic security baseline can still be cited, labelled "generic baseline", but never counts as coverage. Any citation of a source that was not retrieved is dropped, so the panel can only cite what was actually retrieved.
 3. **Agent 2 (SDLC):** the LLM rates 15 project traits (covering the problem statement's 13 decision factors) against fixed rubrics and must cite evidence; a deterministic engine ranks Waterfall, V-Model, Incremental, Agile, Spiral, DevSecOps and the Agile-V hybrid with percentage scores; the LLM then explains the result. The LLM never picks the model, and the choice is marked as needing approval by the project manager, architect, security team and compliance officer.
 4. **Workflow (pipeline):** the recommended model's base phases (plain data, with activities, roles, deliverables, security activities, testing, compliance checkpoints, approval gates, entry/exit criteria and traceability) plus scenario-specific items one LLM call may add, linked to requirement IDs.
+5. **Artefacts and SRS (pipeline):** user stories with acceptance criteria, use cases, process workflows, data and interface requirements (one LLM call), plus a traceability matrix, compliance-control matrix, assumptions and dependency register and open-issues list built by code. Everything is assembled into one SRS you can download as Markdown or open as a print-friendly HTML page (Print -> Save as PDF).
 
 **Compliance mapping and risk register (pipeline):** each requirement is mapped to the knowledge-base sources that apply to the scenario's domain, with jurisdiction, version, required control, verified evidence, satisfied/gap, graded confidence and a human-review flag; a threat and risk register scores likelihood x impact in code.
 
 **Quality check (API and pipeline):** flags ambiguity, untestable wording and near-duplicates by deterministic rules, and conflicts between requirements with one LLM call; each flag has requirement IDs, a reason and a suggested fix.
 
 Every LLM reply is checked against a schema (`app/schemas.py`): allowed values, known requirement IDs, real knowledge-base sources, all nine traits as integers 1-5. An invalid reply is retried once with the errors, then the API returns a 502 rather than guessing.
+
+Download the SRS of a pipeline run from the links in its `srs` key, e.g. `GET /agents/srs/<id>?format=html`, or `POST /agents/srs?format=markdown` with a saved pipeline result.
 
 Details, the class diagram and the full scoring tables are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -88,6 +91,9 @@ app/
     risk_agent.py            threat and risk register
     sdlc_workflows.py        base SDLC workflow phases per model (plain data)
     workflow_agent.py        project-specific workflow additions
+    artefact_agent.py        user stories, use cases, process workflows, data and interface requirements
+  artefacts.py               traceability matrix, compliance-control matrix, registers, open issues (no LLM)
+  srs.py                     SRS as Markdown and print-friendly HTML
     compliance_agent.py      Agent 3 (RAG)
     sdlc_agent.py            Agent 2 (trait extraction + justification)
     sdlc_rules.py            deterministic SDLC scoring engine
