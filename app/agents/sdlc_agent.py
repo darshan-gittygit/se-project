@@ -9,7 +9,8 @@ Pipeline:
    rather than pattern-matching "this sounds serious -> rate everything high".
 2. Pure deterministic Python (sdlc_rules.score_models) scores every
    candidate SDLC model against those traits - reproducible, explainable,
-   no LLM involved in this step, no model has a structural advantage.
+   no LLM involved in this step, and no per-model bonus (win share is not
+   equal across models, see docs/SCORING_ANALYSIS.md).
 3. LLM writes a structured justification for the top pick, grounded in the
    actual measured trait scores AND their evidence - explicitly instructed
    never to contradict a measured score (e.g. cannot call volatility "high"
@@ -20,7 +21,7 @@ Pipeline:
 import re
 
 from app.gemini_client import generate_text
-from app.json_utils import parse_json_response
+from app.schemas import Justification, TraitRatings, generate_validated
 from app.agents.sdlc_rules import (
     score_models, explain_mismatch, is_close_call, top_two_tied, explain_tie_break, TRAIT_LABELS,
 )
@@ -203,7 +204,11 @@ def analyze_traits(
 ) -> dict:
     """
     Returns trait_details: {trait_key: {"score": int, "evidence": str, "reason": str}}
-    for all 9 TRAIT_KEYS. Scores are clamped defensively to 1-5.
+    for all 9 TRAIT_KEYS, validated by TraitRatings. A missing trait or a
+    score that is not an integer from 1 to 5 is retried once and then raises
+    LLMOutputError. It is never clamped or replaced with a default: a silent
+    3 would push the recommendation toward the model whose profile sits
+    nearest the middle of the scale (Incremental).
     """
     prompt = TRAIT_PROMPT_TEMPLATE.format(
         rubrics=TRAIT_RUBRICS,
@@ -214,23 +219,9 @@ def analyze_traits(
     )
     # Temperature 0: trait scores feed a deterministic scorer, so the same
     # requirements should produce the same scores as far as the model allows.
-    raw = generate_text(prompt, temperature=0)
-    parsed = parse_json_response(raw)
-
-    trait_details = {}
-    for key in TRAIT_KEYS:
-        entry = parsed.get(key, {})
-        score = entry.get("score", 3)
-        try:
-            score = max(1, min(5, int(score)))
-        except (TypeError, ValueError):
-            score = 3
-        trait_details[key] = {
-            "score": score,
-            "evidence": entry.get("evidence", ""),
-            "reason": entry.get("reason", ""),
-        }
-    return trait_details
+    ratings = generate_validated(prompt, TraitRatings, generate=generate_text, temperature=0)
+    dumped = ratings.model_dump()
+    return {key: dumped[key] for key in TRAIT_KEYS}
 
 
 def recommend_sdlc(
@@ -286,8 +277,11 @@ def recommend_sdlc(
         close_call_note=close_call_note,
         key_requirements=_format_requirements(key_reqs),
     )
-    raw_justification = generate_text(justification_prompt, temperature=0.3)
-    justification = _humanize_trait_keys(parse_json_response(raw_justification))
+    justification = generate_validated(
+        justification_prompt, Justification, generate=generate_text, temperature=0.3,
+        context={"requirement_ids": {r["id"] for r in functional_requirements + non_functional_requirements}},
+    ).model_dump()
+    justification = _humanize_trait_keys(justification)
 
     return {
         "traits": flat_traits,

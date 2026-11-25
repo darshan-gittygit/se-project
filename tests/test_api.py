@@ -66,10 +66,10 @@ def fake_llm(prompt, temperature=0.3):
 def mock_llm(monkeypatch):
     for mod in (req_mod, comp_mod, sdlc_mod):
         monkeypatch.setattr(mod, "generate_text", fake_llm)
-    monkeypatch.setattr(comp_mod, "retrieve", lambda q, top_k=5: [
-        {"text": "KYC text", "source": "kyc_aml", "distance": 0.3},
-        {"text": "Health text", "source": "healthcare_privacy", "distance": 1.4},
-    ])
+    monkeypatch.setattr(comp_mod, "retrieve_many", lambda queries, top_k=3: [[
+        {"id": "kyc_aml-0", "text": "KYC text", "source": "kyc_aml", "distance": 0.3},
+        {"id": "healthcare_privacy-1", "text": "Health text", "source": "healthcare_privacy", "distance": 1.4},
+    ] for _ in queries])
 
 
 client = TestClient(app)
@@ -249,3 +249,8 @@ def test_requirement_agent_runs_at_low_temperature(monkeypatch):
     monkeypatch.setattr(req_mod, "generate_text", recording_llm)
     client.post("/agents/requirements", json={"scenario": "A payroll system for a large company"})
     assert temps["req"] == 0.1
+
+
+def test_api_is_branded_requora():
+    assert app.title.startswith("Requora AI")
+    assert client.get("/openapi.json").json()["info"]["title"].startswith("Requora AI")

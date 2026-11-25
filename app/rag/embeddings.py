@@ -14,18 +14,24 @@ _client = genai.Client(api_key=GEMINI_API_KEY)
 # current replacement, same pattern as the generation model retirements.)
 EMBEDDING_MODEL = "gemini-embedding-001"
 
+# The batch embedding endpoint accepts at most 100 texts per request.
+MAX_BATCH = 100
+
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
     """
     Embeds a batch of texts, returns one vector per input text (same order).
     Used both when building the knowledge base (ingest.py) and when
-    embedding a query at retrieval time (retriever.py).
+    embedding queries at retrieval time (retriever.py).
     """
-    result = _client.models.embed_content(
-        model=EMBEDDING_MODEL,
-        contents=texts,
-    )
-    return [e.values for e in result.embeddings]
+    vectors = []
+    for start in range(0, len(texts), MAX_BATCH):
+        result = _client.models.embed_content(
+            model=EMBEDDING_MODEL,
+            contents=texts[start:start + MAX_BATCH],
+        )
+        vectors.extend(e.values for e in result.embeddings)
+    return vectors
 
 
 def embed_text(text: str) -> list[float]:

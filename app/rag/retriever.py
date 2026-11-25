@@ -1,12 +1,21 @@
 """
-Retrieval side of the RAG pipeline. Call retrieve(query) to get the
-top-k most relevant knowledge base chunks for a given piece of text
-(usually the domain + a summary of the requirements).
+Retrieval side of the RAG pipeline.
+
+retrieve_many(queries) embeds a batch of short queries (one per requirement,
+see compliance_agent.py) in one embedding call and returns the top-k chunks
+for each. retrieve(query) is the single-query convenience form.
+
+Distances are ChromaDB's default "l2" metric, which is the SQUARED Euclidean
+distance between embeddings - lower is better, 0 = identical. Gemini
+embeddings are unit length, so d = 2 - 2*cos(angle). The relevance threshold
+in compliance_agent.py was tuned against this metric with
+scripts/tune_relevance_threshold.py, so re-run that script if the metric, the
+embedding model or the query format changes.
 """
 import chromadb
 
-from app.config import CHROMA_PATH
-from app.rag.embeddings import embed_text
+from app.config import CHROMA_PATH, KNOWLEDGE_BASE_DIR
+from app.rag.embeddings import embed_texts
 
 COLLECTION_NAME = "compliance_kb"
 
@@ -26,33 +35,35 @@ def _get_collection():
     return _collection
 
 
-def retrieve(query: str, top_k: int = 4) -> list[dict]:
-    """
-    Returns up to top_k chunks as [{"text": str, "source": str, "distance": float}, ...],
-    sorted by relevance (lowest distance = most relevant first).
-    distance is ChromaDB's default L2 (squared Euclidean) distance between the
-    query and chunk embeddings - lower is better, 0 = identical. The relevance
-    threshold in compliance_agent.py (0.65) was chosen empirically against
-    this metric, so do not switch the collection's distance metric without
-    re-tuning that threshold.
-    """
-    collection = _get_collection()
-    query_embedding = embed_text(query)
+def known_sources() -> list[str]:
+    """Source names of every knowledge-base document (file names without .txt)."""
+    return sorted(p.stem for p in KNOWLEDGE_BASE_DIR.glob("*.txt"))
 
+
+def retrieve_many(queries: list[str], top_k: int = 3) -> list[list[dict]]:
+    """
+    For each query, returns up to top_k chunks as
+    [{"id": str, "text": str, "source": str, "distance": float}, ...],
+    most relevant (lowest distance) first. Output order matches `queries`.
+    """
+    if not queries:
+        return []
+    collection = _get_collection()
     results = collection.query(
-        query_embeddings=[query_embedding],
+        query_embeddings=embed_texts(queries),
         n_results=top_k,
     )
+    per_query = []
+    for ids, docs, metas, dists in zip(
+        results["ids"], results["documents"], results["metadatas"], results["distances"]
+    ):
+        per_query.append([
+            {"id": cid, "text": doc, "source": (meta or {}).get("source", "unknown"), "distance": dist}
+            for cid, doc, meta, dist in zip(ids, docs, metas, dists)
+        ])
+    return per_query
 
-    chunks = []
-    documents = results.get("documents", [[]])[0]
-    metadatas = results.get("metadatas", [[]])[0]
-    distances = results.get("distances", [[]])[0]
 
-    for doc, meta, dist in zip(documents, metadatas, distances):
-        chunks.append({
-            "text": doc,
-            "source": meta.get("source", "unknown"),
-            "distance": dist,
-        })
-    return chunks
+def retrieve(query: str, top_k: int = 4) -> list[dict]:
+    """Single-query form of retrieve_many."""
+    return retrieve_many([query], top_k)[0]

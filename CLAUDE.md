@@ -23,7 +23,7 @@ Course project (CS305 Software Engineering, NITK, solo, by Darshan). A FastAPI a
 
 - Google retires free-tier Gemini model names often. The error message names the replacement; update `GEMINI_MODEL` in `.env` and `FALLBACK_MODELS` in `app/gemini_client.py`.
 - `.env` and Python changes need a server restart if `--reload` misses them; a stale process on the port causes confusing "old code" behaviour.
-- ChromaDB distances are the default L2 metric; the 0.65 relevance threshold in `compliance_agent.py` was tuned for that. Re-tune it if the metric changes.
+- ChromaDB distances are the default squared-L2 metric; the 0.62 relevance threshold in `compliance_agent.py` was tuned for that and for one query per requirement (`python -m scripts.tune_relevance_threshold`, results in `docs/RAG_TUNING.md`). Re-tune it if the metric, embedding model or query format changes.
 - `google-genai==0.3.0` is pinned (it is what the working venv uses) but is marked yanked on PyPI for Pillow vulnerability issues. Upgrading is a sensible task, but test live afterwards: `generate_content`, `embed_content` and the error classes are used in `app/gemini_client.py` and `app/rag/embeddings.py`.
 
 ## Layout
@@ -35,3 +35,6 @@ See `README.md` (project layout) and `docs/ARCHITECTURE.md` (design, diagrams, s
 - Live verification of the 9-trait extraction on the four test scenarios (social media, payroll, railway, food delivery); payroll volatility should come out low (1-2).
 - Documentation generator (auto SRS from the three agents' output), audit log, evaluation metrics.
 - Feed compliance findings into SDLC criticality/verification scoring.
+
+
+Keep it simple: standard library first, no new dependencies or frameworks without asking, small modules with tests.

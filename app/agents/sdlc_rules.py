@@ -142,9 +142,15 @@ def score_models(traits: dict) -> list[dict]:
     Returns a list of {"model": str, "score": float (0-100), "profile": dict},
     sorted best-fit first (ties broken as described in _rank). Score is a
     weighted similarity to each model's ideal profile, normalized to 0-100
-    identically for every model - no model has a structural numerical
-    advantage; a model only wins because its profile best matches the
-    extracted characteristics.
+    by the same formula for every model, with no per-model bonus or offset
+    (each model scores exactly 100 on its own profile).
+
+    Equal treatment is not equal win share: a profile near the middle of the
+    1-5 scale is closer on average to an arbitrary trait vector, so over all
+    5^9 possible vectors Incremental ranks first most often (39.7%) and
+    Waterfall least (8.5%). See scripts/win_share.py and
+    docs/SCORING_ANALYSIS.md. The profiles encode what each methodology is
+    built for and were deliberately not tuned to equalise those shares.
     """
     return [
         {"model": r["model"], "score": round(r["raw_score"], 1), "profile": r["profile"]}

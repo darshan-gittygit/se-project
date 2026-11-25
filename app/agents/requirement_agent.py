@@ -9,7 +9,7 @@ healthcare, e-commerce, whatever the evaluator types in) - that's what
 the few-shot example and strict schema instructions in the prompt are for.
 """
 from app.gemini_client import generate_text
-from app.json_utils import parse_json_response
+from app.schemas import RequirementsOutput, generate_validated
 
 PROMPT_TEMPLATE = """You are a senior business analyst specializing in software requirements engineering.
 
@@ -66,9 +66,13 @@ Respond with ONLY the JSON object.
 def extract_requirements(scenario: str) -> dict:
     """
     Returns a dict with keys: domain_inferred, assumptions,
-    functional_requirements, non_functional_requirements.
-    Raises ValueError if the model's output isn't valid JSON.
+    functional_requirements, non_functional_requirements, validated against
+    RequirementsOutput (FR-n / NFR-n ids, unique, priority High/Medium/Low).
+    Raises LLMOutputError if the output is still invalid after one retry.
     """
     prompt = PROMPT_TEMPLATE.format(scenario=scenario.strip())
-    raw = generate_text(prompt, temperature=0.1)  # low: steadier requirement lists run to run
-    return parse_json_response(raw)
+    result = generate_validated(
+        prompt, RequirementsOutput, generate=generate_text,
+        temperature=0.1,  # low: steadier requirement lists run to run
+    )
+    return result.model_dump()

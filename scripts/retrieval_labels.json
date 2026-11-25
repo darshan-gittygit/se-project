@@ -1,0 +1,82 @@
+{
+  "note": "Hand-labelled tuning set for the compliance relevance threshold. 'relevant' lists the knowledge-base files (by source name) whose principles genuinely apply to the query; an empty list means no KB file applies. 'borderline_sources' lists sources that a reasonable reviewer could label either way for that query; those (query, source) pairs are reported but excluded from precision/recall, while every other source for the query is scored normally. The four scenario groups use the requirements Agent 1 generated live for the evaluation scenarios on 2026-11-25. Labels were written by one person and the set is small, so treat the tuned threshold as a documented engineering choice, not a statistically validated one.",
+  "groups": [
+    {
+      "name": "social_media",
+      "scenario": true,
+      "domain": "Social Media Platform",
+      "queries": [
+        {"id": "FR-1", "text": "The system shall allow users to create and publish short updates, photos, and videos.", "relevant": []},
+        {"id": "FR-2", "text": "The system shall allow users to follow and unfollow other user accounts.", "relevant": []},
+        {"id": "FR-3", "text": "The system shall allow users to add comments and reactions to existing posts.", "relevant": []},
+        {"id": "FR-4", "text": "The system shall support dynamic feature toggling to enable continuous releases and A/B experiments.", "relevant": []},
+        {"id": "NFR-1", "text": "The system architecture shall be modular and decoupled to support frequent requirement changes and rapid continuous deployment.", "relevant": []},
+        {"id": "NFR-2", "text": "The system shall render user feeds and media content within 2 seconds of user request under normal load conditions.", "relevant": []},
+        {"id": "NFR-3", "text": "The system shall encrypt all user data and media assets both in transit and at rest.", "relevant": ["data_protection", "general_security_baseline"]}
+      ]
+    },
+    {
+      "name": "payroll",
+      "scenario": true,
+      "domain": "Enterprise Payroll Processing System",
+      "queries": [
+        {"id": "FR-1", "text": "The system shall calculate gross salaries, deductions, and applicable taxes for all 20,000 employees based on predefined HR policies.", "relevant": []},
+        {"id": "FR-2", "text": "The system shall generate individual electronic payslips for each employee following every completed payroll cycle.", "relevant": []},
+        {"id": "FR-3", "text": "The system shall generate accurate statutory filings required by tax and government authorities.", "relevant": []},
+        {"id": "FR-4", "text": "The system shall maintain a complete, immutable audit trail of all calculation overrides, data modifications, and payroll approvals.", "relevant": ["general_security_baseline"]},
+        {"id": "NFR-1", "text": "The system shall ensure 100% computational accuracy for all salary and tax calculations without rounding discrepancies.", "relevant": []},
+        {"id": "NFR-2", "text": "The system shall encrypt all employee financial and personal data both in transit and at rest.", "relevant": ["data_protection", "general_security_baseline"]},
+        {"id": "NFR-3", "text": "The system shall complete the full payroll calculation cycle for all 20,000 employees within a 4-hour processing window.", "relevant": []}
+      ]
+    },
+    {
+      "name": "railway",
+      "scenario": true,
+      "domain": "Railway Signalling and Train Control System",
+      "queries": [
+        {"id": "FR-1", "text": "The system shall manage and control track signals to ensure safe separation between trains.", "relevant": []},
+        {"id": "FR-2", "text": "The system shall execute interlocking logic to prevent conflicting route assignments.", "relevant": []},
+        {"id": "FR-3", "text": "The system shall issue, modify, and revoke movement authorities for all active trains.", "relevant": []},
+        {"id": "FR-4", "text": "The system shall record and log all signalling commands, train movements, and system alerts for auditing purposes.", "relevant": [], "borderline_sources": ["general_security_baseline"], "why": "Operational event logging; the baseline's audit-log principle is about security-relevant actions (logins, permission changes), so it may or may not apply. Every other source, e.g. KYC/AML transaction logging, clearly does not."},
+        {"id": "NFR-1", "text": "The system shall achieve a reliability and availability rating meeting Safety Integrity Level 4 (SIL 4) standards to prevent collisions.", "relevant": [], "borderline_sources": ["general_security_baseline"], "why": "The domain-agnostic baseline mentions uptime targets, which is not a railway safety obligation; arguable either way. Every other source clearly does not apply."},
+        {"id": "NFR-2", "text": "The system shall process and transmit train movement authorities with a latency of less than 100 milliseconds.", "relevant": []},
+        {"id": "NFR-3", "text": "The system shall undergo rigorous verification and validation processes to comply with established railway safety standards prior to deployment.", "relevant": []}
+      ]
+    },
+    {
+      "name": "food_delivery",
+      "scenario": true,
+      "domain": "Food Delivery Platform",
+      "queries": [
+        {"id": "FR-1", "text": "The system shall allow customers to browse restaurant menus and place orders.", "relevant": []},
+        {"id": "FR-2", "text": "The system shall allow couriers to accept, manage, and update the status of delivery assignments.", "relevant": []},
+        {"id": "FR-3", "text": "The system shall provide customers with real-time tracking of their delivery location.", "relevant": []},
+        {"id": "FR-4", "text": "The system shall support promotional campaigns and loyalty programs for customers.", "relevant": []},
+        {"id": "FR-5", "text": "The system shall process secure digital payments for customer orders.", "relevant": ["payment_security"]},
+        {"id": "NFR-1", "text": "The system shall be structured into modular services that allow independent deployment without affecting other services.", "relevant": []},
+        {"id": "NFR-2", "text": "The system shall encrypt all payment transactions and sensitive user data in transit and at rest.", "relevant": ["payment_security", "data_protection", "general_security_baseline"]},
+        {"id": "NFR-3", "text": "The real-time delivery tracking feature shall update location data with a latency of less than 3 seconds.", "relevant": []},
+        {"id": "NFR-4", "text": "The system architecture shall scale individual services independently to handle peak ordering hours.", "relevant": []}
+      ]
+    },
+    {
+      "name": "financial_and_health",
+      "scenario": false,
+      "domain": null,
+      "queries": [
+        {"id": "LOAN-1", "domain": "Digital Loan Origination", "text": "The system shall verify the applicant's identity documents and proof of address before approving a loan.", "relevant": ["kyc_aml"]},
+        {"id": "LOAN-2", "domain": "Digital Loan Origination", "text": "The system shall provide declined applicants with the reason for the credit decision.", "relevant": ["fair_lending"]},
+        {"id": "LOAN-3", "domain": "Digital Loan Origination", "text": "The system shall disclose interest rates and fees before the borrower commits to the loan.", "relevant": ["fair_lending"]},
+        {"id": "PAY-1", "domain": "Payment Gateway", "text": "The system shall flag unusually large or rapid fund transfers for human review.", "relevant": ["kyc_aml", "payment_security"]},
+        {"id": "PAY-2", "domain": "Payment Gateway", "text": "The system shall tokenize card numbers instead of storing them.", "relevant": ["payment_security"]},
+        {"id": "BANK-1", "domain": "Mobile Banking Application", "text": "The system shall require multi-factor authentication for customer login.", "relevant": ["general_security_baseline"]},
+        {"id": "BANK-2", "domain": "Mobile Banking Application", "text": "The system shall notify affected users and the regulator after a personal data breach.", "relevant": ["data_protection"]},
+        {"id": "BANK-3", "domain": "Mobile Banking Application", "text": "The system shall let users request deletion of their personal data.", "relevant": ["data_protection"]},
+        {"id": "HEALTH-1", "domain": "Telehealth Consultation Platform", "text": "The system shall encrypt video consultation streams end to end.", "relevant": ["healthcare_privacy"]},
+        {"id": "HEALTH-2", "domain": "Telehealth Consultation Platform", "text": "The system shall obtain explicit patient consent before sharing records with insurers.", "relevant": ["healthcare_privacy", "data_protection"]},
+        {"id": "INV-1", "domain": "Warehouse Inventory Management", "text": "The system shall generate a weekly stock-level report per warehouse.", "relevant": []},
+        {"id": "GAME-1", "domain": "Mobile Puzzle Game", "text": "The system shall update the leaderboard within 5 seconds of a match ending.", "relevant": []}
+      ]
+    }
+  ]
+}

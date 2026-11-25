@@ -13,8 +13,10 @@ Scenario -> Agent 1: Requirements -> Agent 3: Compliance & Risk (RAG) -> Agent 2
 ```
 
 1. **Agent 1 (requirements):** functional and non-functional requirements with IDs and priorities.
-2. **Agent 3 (compliance and risk):** retrieves relevant chunks from the knowledge base in `knowledge_base/` (ChromaDB + Gemini embeddings), cites only what it retrieved, and says so when the knowledge base does not cover the domain.
+2. **Agent 3 (compliance and risk):** runs one retrieval query per requirement against the knowledge base in `knowledge_base/` (ChromaDB + Gemini embeddings) and passes only chunks under a tuned distance threshold to the LLM. Whether the knowledge base covers the domain (`kb_relevance`) is computed from those distances using domain-specific sources only; the domain-agnostic security baseline can still be cited, labelled "generic baseline", but never counts as coverage. Any citation of a source that was not retrieved is dropped, so the panel can only cite what was actually retrieved.
 3. **Agent 2 (SDLC):** the LLM rates 9 project traits against fixed rubrics and must cite evidence; a deterministic engine scores Waterfall, V-Model, Incremental, Agile and Spiral; the LLM then explains the result. The LLM never picks the model.
+
+Every LLM reply is checked against a schema (`app/schemas.py`): allowed values, known requirement IDs, real knowledge-base sources, all nine traits as integers 1-5. An invalid reply is retried once with the errors, then the API returns a 502 rather than guessing.
 
 Details, the class diagram and the full scoring tables are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -52,7 +54,14 @@ pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-They cover the scoring engine (including that no model has a hidden advantage), the Gemini fallback logic, JSON parsing, and every API route.
+They cover the scoring engine (including that no model gets a per-model bonus), retrieval filtering and `kb_relevance`, schema validation and retries, the Gemini fallback and rate-limit logic, the analysis scripts, and every API route.
+
+Analysis scripts (not part of the test run):
+
+```powershell
+python -m scripts.sensitivity --write              # offline: win share + sensitivity -> docs/SCORING_ANALYSIS.md
+python -m scripts.tune_relevance_threshold --write # live: re-tunes the RAG threshold -> docs/RAG_TUNING.md
+```
 
 ## Project layout
 
@@ -60,8 +69,9 @@ They cover the scoring engine (including that no model has a hidden advantage), 
 app/
   main.py                    FastAPI routes and static UI
   config.py                  .env loading and project paths
-  gemini_client.py           Gemini calls: retry on 503, fallback across models
+  gemini_client.py           Gemini calls: backoff on 429, retry on 503, fallback across models
   json_utils.py              tolerant JSON parsing of LLM output
+  schemas.py                 Pydantic schemas for every LLM reply + validate/retry helper
   agents/
     requirement_agent.py     Agent 1
     compliance_agent.py      Agent 3 (RAG)
@@ -72,7 +82,11 @@ app/
 knowledge_base/              curated compliance source documents (*.txt)
 chroma_db/                   generated vector store (rebuild with the ingest command)
 tests/                       offline test suite
+scripts/                     threshold tuning (live), win-share and sensitivity analysis (offline)
 docs/ARCHITECTURE.md         design notes, diagrams, scoring tables
+docs/RAG_TUNING.md           relevance threshold tuning results
+docs/SCORING_ANALYSIS.md     win share and sensitivity of the SDLC scoring
+docs/EVALUATION_BASELINE.md  evaluation of the project before the critical fixes
 ```
 
 ## Troubleshooting
@@ -82,6 +96,8 @@ docs/ARCHITECTURE.md         design notes, diagrams, scoring tables
 | `Internal Server Error` or an error panel in the UI | Read the terminal traceback - it names the real cause. |
 | `404 NOT_FOUND ... model is no longer available` | Google retired the model name. Put the replacement it names into `GEMINI_MODEL` in `.env`, and add it to `FALLBACK_MODELS` in `app/gemini_client.py`. Restart the server. |
 | `503 UNAVAILABLE` | Google-side demand spike. The client already retries and falls back; just try again. |
+| `429 RESOURCE_EXHAUSTED` | Free-tier rate limit. The client waits and retries (up to 10 s per wait), then tries the next model; a daily-quota error ("retry in 21h") skips straight to the next model. If every model is exhausted, try again later or use another key. |
+| Check that the key and model work | `python -m app.gemini_client` sends one tiny prompt and prints which model answered. |
 | `Knowledge base not found` | Run `python -m app.rag.ingest`. |
 | UI looks old or a stage is missing | Hard refresh the browser (Ctrl+Shift+R). |
 | Changes do not show up / odd stale behaviour | An old server process may still hold the port. Check with `netstat -ano | findstr :8001`, then `taskkill /PID <pid> /F`, or use another `--port`. |
