@@ -8,7 +8,10 @@ from app.agents.sdlc_rules import (
 TRAITS = list(TRAIT_WEIGHTS)
 
 # Hand-written trait vectors that follow the rubrics for each scenario.
-# They test the scoring maths, not live LLM extraction.
+# They test the scoring maths, not live LLM extraction. The six Phase 3
+# traits are the same hand ratings as scripts/sensitivity.py NEW_TRAITS.
+from scripts.sensitivity import NEW_TRAITS
+
 SCENARIOS = {
     "payroll": ({
         "clarity": 5, "volatility": 1, "complexity": 3, "criticality": 5,
@@ -29,8 +32,20 @@ SCENARIOS = {
         "clarity": 3, "volatility": 4, "complexity": 3, "criticality": 3,
         "risk_uncertainty": 2, "verification_validation": 2,
         "stakeholder_feedback": 4, "incremental_suitability": 4, "prototyping_need": 2,
-    }, "Incremental"),
+    }, "Agile-V"),  # was Incremental with 9 traits / 5 models; OPEN DECISION, see test below
 }
+_NEW = {"payroll": "payroll", "railway": "railway", "social_media": "social media", "food_delivery": "food delivery"}
+SCENARIOS = {k: ({**t, **NEW_TRAITS[_NEW[k]]}, w) for k, (t, w) in SCENARIOS.items()}
+
+
+def test_food_delivery_is_a_close_call_between_new_models():
+    # Documents current behaviour, not an endorsement: with 15 traits this
+    # hand-written vector (V&V 2, criticality 3) picks Agile-V because Agile-V
+    # matches the new traits; its defining traits (criticality 5, V&V 5) carry
+    # only 2.1 of the 14.7 total weight. The live food vector picks DevSecOps.
+    ranked = score_models(SCENARIOS["food_delivery"][0])
+    assert [r["model"] for r in ranked[:2]] == ["Agile-V", "DevSecOps"]
+    assert is_close_call(ranked)
 
 
 @pytest.mark.parametrize("name", SCENARIOS)
@@ -91,12 +106,14 @@ import itertools
 from app.agents import sdlc_rules
 from app.agents.sdlc_rules import top_two_tied, explain_tie_break, TIE_TOLERANCE
 
-# Live payroll run that produced an exact 84.0 / 84.0 Waterfall vs V-Model tie.
-# Both have worst gap 2 and total gap 6, so the alphabetical rule decides.
+# An exact V-Model vs Waterfall tie (69.4 / 69.4) found by random search over
+# the 15-trait space. Both have the same worst and total gap, so the
+# alphabetical rule decides. (The 9-trait version was a live payroll run.)
 PAYROLL_TIE = {
-    "clarity": 5, "volatility": 1, "complexity": 2, "criticality": 4,
-    "risk_uncertainty": 1, "verification_validation": 4,
-    "stakeholder_feedback": 1, "incremental_suitability": 3, "prototyping_need": 1,
+    "clarity": 4, "volatility": 5, "complexity": 4, "criticality": 2, "risk_uncertainty": 4,
+    "verification_validation": 4, "stakeholder_feedback": 1, "incremental_suitability": 1,
+    "prototyping_need": 2, "security_risk": 3, "system_size": 4, "legacy_dependence": 3,
+    "continuous_delivery": 1, "stakeholder_availability": 4, "budget_schedule_constraint": 5,
 }
 
 
@@ -112,7 +129,7 @@ def _rankings_for_every_profile_order(monkeypatch, traits, profiles=None):
 def test_payroll_tie_is_detected_and_broken_alphabetically():
     ranked = score_models(PAYROLL_TIE)
     assert [r["model"] for r in ranked[:2]] == ["V-Model", "Waterfall"]
-    assert ranked[0]["score"] == ranked[1]["score"] == 84.0
+    assert ranked[0]["score"] == ranked[1]["score"] == 69.4
     assert top_two_tied(PAYROLL_TIE)
     assert "alphabetical" in explain_tie_break(PAYROLL_TIE)
 
@@ -161,3 +178,54 @@ def test_ties_always_show_as_equal_rounded_scores():
     max_distance = sum(w * 4 for w in TRAIT_WEIGHTS.values())
     smallest_step = 100 * 0.1 / max_distance
     assert smallest_step > 0.1 + TIE_TOLERANCE
+
+
+# --- Phase 3: seven models ranked, percentages, why-not, approvers ----------------
+
+import json
+
+from fastapi.testclient import TestClient
+
+import app.agents.sdlc_agent as sdlc_mod
+from app.main import app
+
+
+def test_seven_models_from_section_14():
+    assert set(SDLC_PROFILES) == {"Waterfall", "V-Model", "Incremental", "Agile", "Spiral", "DevSecOps", "Agile-V"}
+
+
+@pytest.mark.parametrize("model", ["DevSecOps", "Agile-V"])
+def test_new_models_win_on_their_own_profiles_with_100(model):
+    ranked = score_models(dict(SDLC_PROFILES[model]))
+    assert ranked[0]["model"] == model and ranked[0]["score"] == 100.0
+
+
+def test_continuous_secure_deployment_picks_devsecops():
+    # Section 14: "Continuous secure deployment -> DevSecOps"
+    traits = dict(SDLC_PROFILES["Agile"], security_risk=5, continuous_delivery=5, criticality=4,
+                  verification_validation=4)
+    assert score_models(traits)[0]["model"] == "DevSecOps"
+
+
+def test_high_regulation_with_evolving_requirements_picks_agile_v():
+    # Section 14: "High regulation with evolving requirements -> Agile-V-Model hybrid"
+    traits = dict(SDLC_PROFILES["V-Model"], volatility=4, clarity=3, stakeholder_feedback=4,
+                  incremental_suitability=4, stakeholder_availability=4, continuous_delivery=3)
+    assert score_models(traits)[0]["model"] == "Agile-V"
+
+
+def test_sdlc_endpoint_ranks_all_seven_with_percent_why_not_and_approvers(monkeypatch):
+    traits = {k: {"score": v, "evidence": "e", "reason": "r"} for k, v in SCENARIOS["payroll"][0].items()}
+    just = {"requirement_characteristics": "a", "project_characteristics": "b",
+            "engineering_justification": "c", "key_tradeoffs": "d"}
+    monkeypatch.setattr(sdlc_mod, "generate_text", lambda p, temperature=0: json.dumps(
+        traits if "rating project characteristics" in p else just))
+    body = {"domain": "Payroll", "functional_requirements": [{"id": "FR-1", "requirement": "r"}],
+            "non_functional_requirements": [{"id": "NFR-1", "requirement": "r"}]}
+    d = TestClient(app).post("/agents/sdlc", json=body).json()
+    models = d["scored_models"]
+    assert [m["rank"] for m in models] == list(range(1, 8))
+    assert all(m["percent"] == f"{m['score']:.1f}%" for m in models)
+    assert models[0]["why_not"] is None and all(m["why_not"] for m in models[1:])
+    assert d["approval_required"]["approvers"] == ["Project manager", "Architect", "Security team", "Compliance officer"]
+    assert d["approval_required"]["status"] == "pending"

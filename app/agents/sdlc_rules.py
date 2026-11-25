@@ -32,6 +32,16 @@ restore that missing resolution:
 Every trait that was added earns its place by actually breaking a specific
 tie that the original 4-trait system could not break - this was checked
 deliberately rather than padding the model with arbitrary extra dimensions.
+
+Phase 3 added six traits for problem statement section 13 factors that the
+nine did not cover (security risk, system size, legacy-system dependence,
+need for continuous delivery, stakeholder availability, budget/schedule
+constraint) and two models from the section 14 table: DevSecOps
+("continuous secure deployment") and the Agile-V hybrid ("high regulation
+with evolving requirements"). The factor-to-trait mapping and the reasoning
+behind every new profile value are in docs/ARCHITECTURE.md. Profiles and
+weights were fixed before computing any results and were not tuned to
+equalise win share.
 """
 
 # Each model's "ideal" trait profile on the same 1-5 scales. These are
@@ -42,26 +52,52 @@ SDLC_PROFILES = {
         "clarity": 5, "volatility": 1, "complexity": 2, "criticality": 2,
         "risk_uncertainty": 1, "verification_validation": 2,
         "stakeholder_feedback": 1, "incremental_suitability": 1, "prototyping_need": 1,
+        "security_risk": 3, "system_size": 2, "legacy_dependence": 3, "continuous_delivery": 1,
+        "stakeholder_availability": 2, "budget_schedule_constraint": 4,
     },
     "V-Model": {
         "clarity": 5, "volatility": 1, "complexity": 3, "criticality": 5,
         "risk_uncertainty": 2, "verification_validation": 5,
         "stakeholder_feedback": 1, "incremental_suitability": 1, "prototyping_need": 1,
+        "security_risk": 3, "system_size": 4, "legacy_dependence": 4, "continuous_delivery": 1,
+        "stakeholder_availability": 2, "budget_schedule_constraint": 3,
     },
     "Incremental": {
         "clarity": 3, "volatility": 3, "complexity": 3, "criticality": 2,
         "risk_uncertainty": 2, "verification_validation": 2,
         "stakeholder_feedback": 3, "incremental_suitability": 5, "prototyping_need": 2,
+        "security_risk": 3, "system_size": 4, "legacy_dependence": 4, "continuous_delivery": 3,
+        "stakeholder_availability": 3, "budget_schedule_constraint": 4,
     },
     "Agile": {
         "clarity": 2, "volatility": 5, "complexity": 3, "criticality": 2,
         "risk_uncertainty": 2, "verification_validation": 1,
         "stakeholder_feedback": 5, "incremental_suitability": 5, "prototyping_need": 2,
+        "security_risk": 3, "system_size": 2, "legacy_dependence": 2, "continuous_delivery": 4,
+        "stakeholder_availability": 5, "budget_schedule_constraint": 3,
     },
     "Spiral": {
         "clarity": 3, "volatility": 3, "complexity": 5, "criticality": 5,
         "risk_uncertainty": 5, "verification_validation": 3,
         "stakeholder_feedback": 2, "incremental_suitability": 2, "prototyping_need": 5,
+        "security_risk": 3, "system_size": 5, "legacy_dependence": 4, "continuous_delivery": 2,
+        "stakeholder_availability": 3, "budget_schedule_constraint": 1,
+    },
+    # Section 14: "Continuous secure deployment -> DevSecOps".
+    "DevSecOps": {
+        "clarity": 3, "volatility": 4, "complexity": 4, "criticality": 4,
+        "risk_uncertainty": 2, "verification_validation": 4,
+        "stakeholder_feedback": 4, "incremental_suitability": 5, "prototyping_need": 2,
+        "security_risk": 5, "system_size": 3, "legacy_dependence": 2, "continuous_delivery": 5,
+        "stakeholder_availability": 4, "budget_schedule_constraint": 3,
+    },
+    # Section 14: "High regulation with evolving requirements -> Agile-V-Model hybrid".
+    "Agile-V": {
+        "clarity": 3, "volatility": 4, "complexity": 3, "criticality": 5,
+        "risk_uncertainty": 2, "verification_validation": 5,
+        "stakeholder_feedback": 4, "incremental_suitability": 4, "prototyping_need": 2,
+        "security_risk": 4, "system_size": 4, "legacy_dependence": 3, "continuous_delivery": 3,
+        "stakeholder_availability": 4, "budget_schedule_constraint": 2,
     },
 }
 
@@ -81,6 +117,15 @@ TRAIT_WEIGHTS = {
     "stakeholder_feedback": 1.2,
     "incremental_suitability": 1.0,
     "prototyping_need": 1.1,
+    # Section 13 factors added in Phase 3. continuous_delivery does the most
+    # separating work (DevSecOps/Agile vs plan-driven models), like volatility;
+    # size and budget/schedule have the weakest link to model choice.
+    "security_risk": 1.0,
+    "system_size": 0.6,
+    "legacy_dependence": 0.8,
+    "continuous_delivery": 1.2,
+    "stakeholder_availability": 0.8,
+    "budget_schedule_constraint": 0.6,
 }
 
 MAX_TRAIT_DISTANCE = 4  # on a 1-5 scale, max possible difference per trait
@@ -92,7 +137,7 @@ CLOSE_CALL_MARGIN = 5.0
 
 # Two UNROUNDED scores this close are a tie. With the current weights every
 # weighted distance is a multiple of 0.1, so distinct scores differ by at
-# least 100 * 0.1 / 38.8 = 0.26 points: in practice a tie means an identical
+# least 100 * 0.1 / 58.8 = 0.17 points: in practice a tie means an identical
 # weighted distance, which also shows as identical 1-decimal scores in the UI
 # (tests/test_scoring.py checks this granularity assumption).
 TIE_TOLERANCE = 0.05
@@ -138,7 +183,7 @@ def _rank(traits: dict) -> list[dict]:
 
 def score_models(traits: dict) -> list[dict]:
     """
-    traits: dict with all 9 keys in TRAIT_WEIGHTS, each an int 1-5.
+    traits: dict with all 15 keys in TRAIT_WEIGHTS, each an int 1-5.
     Returns a list of {"model": str, "score": float (0-100), "profile": dict},
     sorted best-fit first (ties broken as described in _rank). Score is a
     weighted similarity to each model's ideal profile, normalized to 0-100
@@ -201,6 +246,12 @@ TRAIT_LABELS = {
     "stakeholder_feedback": "stakeholder feedback need",
     "incremental_suitability": "incremental delivery suitability",
     "prototyping_need": "prototyping/experimentation need",
+    "security_risk": "security risk",
+    "system_size": "system size",
+    "legacy_dependence": "legacy-system dependence",
+    "continuous_delivery": "need for continuous delivery",
+    "stakeholder_availability": "stakeholder availability",
+    "budget_schedule_constraint": "budget and schedule constraint",
 }
 
 

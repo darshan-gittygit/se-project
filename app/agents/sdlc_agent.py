@@ -2,7 +2,7 @@
 Agent 2: SDLC Recommender (hybrid)
 
 Pipeline:
-1. LLM reads the requirements and rates the project on 9 traits (1-5 each),
+1. LLM reads the requirements and rates the project on 15 traits (1-5 each),
    constrained by explicit scoring rubrics (TRAIT_RUBRICS below) - NOT asked
    to freely guess numbers. Each trait requires cited evidence and a reason,
    which forces the model to ground its rating in the actual scenario text
@@ -30,6 +30,10 @@ TRAIT_KEYS = [
     "clarity", "volatility", "complexity", "criticality",
     "risk_uncertainty", "verification_validation",
     "stakeholder_feedback", "incremental_suitability", "prototyping_need",
+    # Problem statement section 13 factors not covered by the nine above
+    # (mapping in docs/ARCHITECTURE.md, "SDLC decision factors").
+    "security_risk", "system_size", "legacy_dependence", "continuous_delivery",
+    "stakeholder_availability", "budget_schedule_constraint",
 ]
 
 # Explicit scoring rubrics. The LLM is given these anchors verbatim and
@@ -80,9 +84,9 @@ RISK / UNCERTAINTY (how novel or unproven the problem/approach is - NOT the same
 5 = Highly uncertain or novel; requires continuous risk analysis to de-risk the approach.
 A project can be extremely high-criticality (catastrophic if it fails) while still being LOW risk/uncertainty, if it uses a mature, well-standardized engineering approach (e.g. established safety-critical domains with existing standards). Risk/uncertainty measures novelty, not stakes.
 
-VERIFICATION & VALIDATION INTENSITY (how rigorous testing/verification needs to be)
+VERIFICATION & VALIDATION INTENSITY (how rigorous testing, verification and the documentation that evidences them need to be)
 1 = Normal testing is sufficient.
-5 = Extremely rigorous verification, validation, traceability, or safety-critical testing required.
+5 = Extremely rigorous verification, validation, traceability, documentation or safety-critical / formal verification required.
 
 STAKEHOLDER FEEDBACK NEED (how central continuous user/stakeholder feedback is to development)
 1 = Little need for continuous feedback once requirements are set.
@@ -95,9 +99,52 @@ INCREMENTAL DELIVERY SUITABILITY (can functionality be naturally split into usab
 PROTOTYPING / EXPERIMENTATION NEED (need to build throwaway prototypes to reduce uncertainty)
 1 = Little or no need for prototypes.
 5 = Substantial uncertainty requires prototyping and experimentation before committing to an approach.
+
+SECURITY RISK (how attractive and exposed the system is to attack, and how much harm a breach would do)
+1 = No sensitive data and no external exposure (e.g. an internal tool on public information).
+2 = Limited personal data, or access only from inside the organisation.
+3 = User accounts or personal data reachable from the internet.
+4 = Sensitive personal or financial data, payments, or an obvious target for fraud.
+5 = A high-value target where a breach causes severe harm (e.g. core banking, payment rails, safety-control networks, critical infrastructure).
+
+SYSTEM SIZE (scale of the system and of the effort to build it - NOT technical difficulty, which is complexity)
+1 = A small tool or single module for one small team.
+2 = A small application with a few features.
+3 = A medium system: several modules, one team.
+4 = A large system: many modules, several teams or a large user base.
+5 = Programme scale: many teams or organisations, very large user base.
+
+LEGACY-SYSTEM DEPENDENCE (how much the system depends on existing systems that constrain it)
+1 = Greenfield: no existing systems to work with.
+2 = A few simple integrations with modern, well-documented services.
+3 = Several integrations with existing internal systems.
+4 = Core functions depend on legacy systems (e.g. mainframes, core banking, existing databases or hardware) that constrain the design.
+5 = It replaces or tightly wraps a legacy system and must reproduce its behaviour.
+
+NEED FOR CONTINUOUS DELIVERY (how often changes must reach production)
+1 = A single release, or rare releases months or years apart.
+2 = A few planned releases per year.
+3 = Regular releases every few weeks.
+4 = Frequent releases (weekly or more), feature flags or A/B tests.
+5 = Continuous deployment to production is stated or essential.
+
+STAKEHOLDER AVAILABILITY (how available users and business stakeholders are to take part during development - NOT how much feedback is needed)
+1 = Available only at the start and at sign-off.
+2 = Occasional milestone reviews.
+3 = Regular reviews every few weeks.
+4 = Frequent access (about weekly) with an engaged product owner.
+5 = Continuously available: embedded in the team, or live usage data is available.
+
+BUDGET AND SCHEDULE CONSTRAINT (how fixed and tight the budget and the deadline are)
+1 = Flexible budget and timeline.
+2 = Mostly flexible, with target dates.
+3 = A fixed target date or budget, with some flexibility in scope.
+4 = A fixed budget and deadline (e.g. a contract or a regulatory date).
+5 = A fixed, tight budget and an immovable deadline with little contingency.
+For security risk, size, legacy dependence, continuous delivery, availability and budget/schedule: if the input says nothing, choose the anchor the domain and requirements most plausibly imply, and say in "evidence" that it is inferred.
 """
 
-TRAIT_PROMPT_TEMPLATE = """You are a software engineering process consultant rating a project on 9 characteristics, using ONLY the rubrics provided below. Do not invent your own scale.
+TRAIT_PROMPT_TEMPLATE = """You are a software engineering process consultant rating project characteristics (15 traits), using ONLY the rubrics provided below. Do not invent your own scale.
 
 {rubrics}
 
@@ -120,8 +167,10 @@ Rules:
 - Do NOT infer high risk_uncertainty merely because criticality is high. A mature, well-understood engineering domain can be both high-criticality and low-risk/uncertainty.
 - Do NOT infer high complexity merely because there are many requirements - base it on system structure and technical difficulty.
 - criticality must be based on consequences of failure, not on how technically difficult the system is.
+- Do NOT infer high continuous_delivery merely because requirements change: it is about how often changes must reach production.
+- stakeholder_availability is about access to stakeholders, not about how much feedback is needed (that is stakeholder_feedback).
 
-Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this schema (all 9 traits required):
+Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this schema (all 15 traits required):
 {{
   "clarity": {{"score": <1-5>, "evidence": "...", "reason": "..."}},
   "volatility": {{"score": <1-5>, "evidence": "...", "reason": "..."}},
@@ -131,7 +180,13 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
   "verification_validation": {{"score": <1-5>, "evidence": "...", "reason": "..."}},
   "stakeholder_feedback": {{"score": <1-5>, "evidence": "...", "reason": "..."}},
   "incremental_suitability": {{"score": <1-5>, "evidence": "...", "reason": "..."}},
-  "prototyping_need": {{"score": <1-5>, "evidence": "...", "reason": "..."}}
+  "prototyping_need": {{"score": <1-5>, "evidence": "...", "reason": "..."}},
+  "security_risk": {{"score": <1-5>, "evidence": "...", "reason": "..."}},
+  "system_size": {{"score": <1-5>, "evidence": "...", "reason": "..."}},
+  "legacy_dependence": {{"score": <1-5>, "evidence": "...", "reason": "..."}},
+  "continuous_delivery": {{"score": <1-5>, "evidence": "...", "reason": "..."}},
+  "stakeholder_availability": {{"score": <1-5>, "evidence": "...", "reason": "..."}},
+  "budget_schedule_constraint": {{"score": <1-5>, "evidence": "...", "reason": "..."}}
 }}
 """
 
@@ -196,6 +251,21 @@ def _humanize_trait_keys(justification: dict) -> dict:
     return {section: _humanize(text) for section, text in justification.items()}
 
 
+# Problem statement section 14: "The final choice should be approved by the
+# project manager, architect, security team, and compliance officer."
+SDLC_APPROVERS = ("Project manager", "Architect", "Security team", "Compliance officer")
+
+
+def approval_required(model: str) -> dict:
+    return {
+        "approvers": list(SDLC_APPROVERS),
+        "status": "pending",
+        "note": (f"Advisory only: adopting {model} must be approved by the project manager, architect, "
+                 "security team and compliance officer (problem statement section 14). Nothing in this "
+                 "system records that approval yet."),
+    }
+
+
 def analyze_traits(
     domain: str,
     functional_requirements: list[dict],
@@ -204,7 +274,7 @@ def analyze_traits(
 ) -> dict:
     """
     Returns trait_details: {trait_key: {"score": int, "evidence": str, "reason": str}}
-    for all 9 TRAIT_KEYS, validated by TraitRatings. A missing trait or a
+    for all 15 TRAIT_KEYS, validated by TraitRatings. A missing trait or a
     score that is not an integer from 1 to 5 is retried once and then raises
     LLMOutputError. It is never clamped or replaced with a default: a silent
     3 would push the recommendation toward the model whose profile sits
@@ -245,6 +315,11 @@ def recommend_sdlc(
     close_call = tied or is_close_call(scored_models)
 
     for i, entry in enumerate(scored_models):
+        # Additive: 1-based rank and the score as a percentage label (section 14
+        # asks for "ranked recommendations" with percentages; the score is a
+        # 0-100 compatibility score, not a probability).
+        entry["rank"] = i + 1
+        entry["percent"] = f"{entry['score']:.1f}%"
         entry["why_not"] = None if i == 0 else explain_mismatch(entry["model"], flat_traits)
     if tied:
         # Same response shape: the runner-up's why_not string carries the tie-break reason.
@@ -290,4 +365,5 @@ def recommend_sdlc(
         "recommended_model": top["model"],
         "is_close_call": close_call,
         "justification": justification,
+        "approval_required": approval_required(top["model"]),
     }

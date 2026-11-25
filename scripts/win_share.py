@@ -1,7 +1,12 @@
 """
-Win-share analysis of the SDLC scoring engine: over ALL 5^9 = 1,953,125
-possible trait vectors, how often does each model rank first, and what are
-its mean / lowest / highest compatibility scores?
+Win-share analysis of the SDLC scoring engine: across the space of possible
+trait vectors, how often does each model rank first, and what are its mean,
+lowest possible and highest compatibility scores?
+
+With 15 traits the space has 5^15 (about 3.1e10) vectors, too many to
+enumerate, so the shares come from a seeded uniform random sample of
+SAMPLE_SIZE vectors (the standard error is printed; about 0.05 percentage
+points). Lowest and highest possible scores are computed exactly.
 
     python -m scripts.win_share
 
@@ -13,64 +18,77 @@ coverage of all vectors is not a realistic prior for real projects; the
 table describes the geometry of the profiles, not how often each model
 should be recommended.
 
-Offline and deterministic (no LLM, no network). Uses numpy for speed; the
+Offline and deterministic for a given seed (no LLM, no network). Uses numpy for speed; the
 winner rule mirrors sdlc_rules._rank exactly (weighted distance, then worst
 single-trait gap, then total gap, then name), and tests/test_analysis_scripts.py
 checks it against the real engine.
 """
-import itertools
-
 import numpy as np
 
 from app.agents import sdlc_rules
 
 
-def _grid() -> np.ndarray:
-    return np.array(list(itertools.product(range(1, 6), repeat=9)), dtype=np.int8)
+SAMPLE_SIZE = 1_000_000
+SEED = 305
+CHUNK = 200_000
+
+
+def _sample(n_traits: int, size: int = SAMPLE_SIZE, seed: int = SEED):
+    rng = np.random.default_rng(seed)
+    left = size
+    while left > 0:
+        n = min(CHUNK, left)
+        yield rng.integers(1, 6, size=(n, n_traits), dtype=np.int8)
+        left -= n
 
 
 def analyse(profiles=None, weights=None, grid=None) -> dict:
     profiles = profiles or sdlc_rules.SDLC_PROFILES
     weights = weights or sdlc_rules.TRAIT_WEIGHTS
     traits = list(weights)
-    grid = _grid() if grid is None else grid
     names = list(profiles)
     w10 = np.array([round(weights[t] * 10) for t in traits], dtype=np.int32)  # weights are multiples of 0.1
     max_wd = sum(weights[t] * sdlc_rules.MAX_TRAIT_DISTANCE for t in traits)
     rank_of = {n: i for i, n in enumerate(sorted(names))}
+    profs = {n: np.array([profiles[n][t] for t in traits], dtype=np.int8) for n in names}
 
-    keys, scores = [], []
-    for name in names:
-        prof = np.array([profiles[name][t] for t in traits], dtype=np.int8)
-        gaps = np.abs(grid - prof).astype(np.int32)
-        wd10 = gaps @ w10                       # weighted distance x 10, exact integer
-        worst, total = gaps.max(axis=1), gaps.sum(axis=1)
-        scores.append((1 - wd10 / 10 / max_wd) * 100)
-        # lexicographic key, smaller is better: distance, worst gap, total gap, name
-        keys.append(((wd10 * 10 + worst) * 100 + total) * 10 + rank_of[name])
-    winner = np.argmin(np.stack(keys, axis=1), axis=1)
-    scores = np.stack(scores, axis=1)
-    return {
-        "n": len(grid),
-        "rows": [
-            {"model": n, "win_share": float(np.mean(winner == i) * 100),
-             "mean": float(scores[:, i].mean()), "min": float(scores[:, i].min()),
-             "max": float(scores[:, i].max()),
-             "max_distance": sum(weights[t] * max(profiles[n][t] - 1, 5 - profiles[n][t]) for t in traits)}
-            for i, n in enumerate(names)
-        ],
-        "winner_index": winner,
-        "names": names,
-    }
+    chunks = [grid] if grid is not None else _sample(len(traits))
+    wins = np.zeros(len(names), dtype=np.int64)
+    score_sum = np.zeros(len(names))
+    winners, n_total = [], 0
+    for block in chunks:
+        keys = []
+        for i, name in enumerate(names):
+            gaps = np.abs(block - profs[name]).astype(np.int32)
+            wd10 = gaps @ w10                       # weighted distance x 10, exact integer
+            worst, total = gaps.max(axis=1), gaps.sum(axis=1)
+            score_sum[i] += ((1 - wd10 / 10 / max_wd) * 100).sum()
+            # lexicographic key, smaller is better: distance, worst gap, total gap, name
+            keys.append(((wd10.astype(np.int64) * 10 + worst) * 100 + total) * 10 + rank_of[name])
+        winner = np.argmin(np.stack(keys, axis=1), axis=1)
+        wins += np.bincount(winner, minlength=len(names))
+        winners.append(winner)
+        n_total += len(block)
+    rows = []
+    for i, n in enumerate(names):
+        far = sum(weights[t] * max(profiles[n][t] - 1, 5 - profiles[n][t]) for t in traits)
+        share = wins[i] / n_total
+        rows.append({"model": n, "win_share": float(share * 100),
+                     "std_error": float(np.sqrt(share * (1 - share) / n_total) * 100),
+                     "mean": float(score_sum[i] / n_total), "min": float((1 - far / max_wd) * 100),
+                     "max": 100.0, "max_distance": far})
+    return {"n": n_total, "sampled": grid is None, "rows": rows,
+            "winner_index": np.concatenate(winners), "names": names}
 
 
 def report() -> str:
     res = analyse()
     all3 = sdlc_rules.score_models({t: 3 for t in sdlc_rules.TRAIT_WEIGHTS})
     lines = [
-        "## Win share over every possible trait vector", "",
-        f"All {res['n']:,} vectors with each of the 9 traits in 1-5, scored by the engine's own "
-        "formula and tie-break (`python -m scripts.win_share`).", "",
+        "## Win share over the trait-vector space", "",
+        f"A seeded uniform random sample of {res['n']:,} vectors (each of the {len(sdlc_rules.TRAIT_WEIGHTS)} traits "
+        f"in 1-5; standard error at most {max(r['std_error'] for r in res['rows']):.2f} points), scored by the engine's "
+        "own formula and tie-break (`python -m scripts.win_share`). Lowest and highest possible scores are exact.", "",
         "| Model | Wins (share of all vectors) | Mean score | Lowest possible | Highest | Largest possible weighted distance from its profile |",
         "|---|---|---|---|---|---|",
     ]

@@ -14,8 +14,9 @@ import app.agents.compliance_agent as comp_mod
 import app.agents.sdlc_agent as sdlc_mod
 import app.agents.quality_agent as quality_mod
 import app.agents.risk_agent as risk_mod
+import app.agents.workflow_agent as workflow_mod
 from app.main import app
-from tests.helpers import RISK_PROMPT_MARKER, record, risk_reply
+from tests.helpers import RISK_PROMPT_MARKER, WORKFLOW_PROMPT_MARKER, record, risk_reply
 
 REQS = {
     "domain_inferred": "Payroll Processing System",
@@ -29,7 +30,10 @@ REQS = {
     ],
 }
 
+from scripts.sensitivity import NEW_TRAITS
+
 TRAITS = {
+    **NEW_TRAITS["payroll"],
     "clarity": 5, "volatility": 1, "complexity": 3, "criticality": 5,
     "risk_uncertainty": 1, "verification_validation": 5,
     "stakeholder_feedback": 1, "incremental_suitability": 1, "prototyping_need": 1,
@@ -53,7 +57,7 @@ JUSTIFICATION = {
 def fake_llm(prompt, temperature=0.3):
     if "business analyst" in prompt:
         return json.dumps(REQS)
-    if "rating a project on 9 characteristics" in prompt:
+    if "rating project characteristics" in prompt:
         return "```json\n" + json.dumps({
             k: {"score": v, "evidence": f"evidence for {k}", "reason": f"reason for {k}"}
             for k, v in TRAITS.items()
@@ -66,12 +70,14 @@ def fake_llm(prompt, temperature=0.3):
         return json.dumps({"conflicts": []})
     if RISK_PROMPT_MARKER in prompt:
         return risk_reply()
+    if WORKFLOW_PROMPT_MARKER in prompt:
+        return json.dumps({"additions": []})
     raise AssertionError("unexpected prompt: " + prompt[:80])
 
 
 @pytest.fixture(autouse=True)
 def mock_llm(monkeypatch):
-    for mod in (req_mod, comp_mod, sdlc_mod, quality_mod, risk_mod):
+    for mod in (req_mod, comp_mod, sdlc_mod, quality_mod, risk_mod, workflow_mod):
         monkeypatch.setattr(mod, "generate_text", fake_llm)
     monkeypatch.setattr(comp_mod, "retrieve_many", lambda queries, top_k=3: [[
         {"id": "data_protection-0", "text": "DP text", "source": "data_protection", "distance": 0.3},
@@ -122,9 +128,9 @@ def test_sdlc_endpoint_payroll_gets_v_model_not_high_volatility():
     d = client.post("/agents/sdlc", json=BODY).json()
     assert d["recommended_model"] == "V-Model"
     assert d["traits"]["volatility"] == 1
-    assert len(d["traits"]) == 9
+    assert len(d["traits"]) == 15
     assert d["trait_details"]["volatility"]["evidence"]
-    assert len(d["scored_models"]) == 5
+    assert len(d["scored_models"]) == 7
     assert d["scored_models"][0]["why_not"] is None
     assert all(m["why_not"] for m in d["scored_models"][1:])
     assert set(d["justification"]) == {
@@ -178,7 +184,7 @@ def test_trait_extraction_runs_at_temperature_zero(monkeypatch):
     temps = {}
 
     def recording_llm(prompt, temperature=0.3):
-        if "rating a project on 9 characteristics" in prompt:
+        if "rating project characteristics" in prompt:
             temps["traits"] = temperature
         return fake_llm(prompt, temperature)
 
@@ -189,7 +195,7 @@ def test_trait_extraction_runs_at_temperature_zero(monkeypatch):
 
 SDLC_RESPONSE_KEYS = {
     "traits", "trait_details", "scored_models", "recommended_model",
-    "is_close_call", "justification", "meta",
+    "is_close_call", "justification", "approval_required", "meta",
 }
 
 
@@ -197,7 +203,7 @@ def _record_trait_prompt(monkeypatch):
     seen = {}
 
     def recording_llm(prompt, temperature=0.3):
-        if "rating a project on 9 characteristics" in prompt:
+        if "rating project characteristics" in prompt:
             seen["prompt"] = prompt
         return fake_llm(prompt, temperature)
 
@@ -229,19 +235,16 @@ def test_compliance_accepts_and_ignores_scenario_field():
 
 
 def test_tie_is_a_close_call_with_reason_and_unchanged_shape(monkeypatch):
-    tied = {
-        "clarity": 5, "volatility": 1, "complexity": 2, "criticality": 4,
-        "risk_uncertainty": 1, "verification_validation": 4,
-        "stakeholder_feedback": 1, "incremental_suitability": 3, "prototyping_need": 1,
-    }
+    from tests.test_scoring import PAYROLL_TIE
+    tied = dict(PAYROLL_TIE)
     monkeypatch.setattr(sys.modules[__name__], "TRAITS", tied)
     d = client.post("/agents/sdlc", json=BODY).json()
     assert set(d) == SDLC_RESPONSE_KEYS
     assert d["recommended_model"] == "V-Model"
     assert d["is_close_call"] is True
     top, runner = d["scored_models"][:2]
-    assert top["score"] == runner["score"] == 84.0
-    assert set(top) == set(runner) == {"model", "score", "profile", "why_not"}
+    assert top["score"] == runner["score"] == 69.4
+    assert set(top) == set(runner) == {"model", "score", "profile", "why_not", "rank", "percent"}
     assert runner["model"] == "Waterfall" and "tied with V-Model" in runner["why_not"]
 
 

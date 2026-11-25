@@ -34,8 +34,9 @@ FALLBACK_MODELS = [
     "gemini-flash-latest",
 ]
 
-MAX_RETRIES_PER_MODEL = 2   # attempts per model on 503
-RETRY_DELAY_SECONDS = 2     # doubles each retry (simple exponential backoff)
+SERVER_ERROR_ATTEMPTS = 4        # attempts per model on 503 (demand spikes are usually short)
+SERVER_ERROR_BASE_DELAY = 2      # seconds; 2, 4, 8 between attempts
+SERVER_ERROR_MAX_TOTAL_WAIT = 15 # never wait longer than this in total on one model for 503s
 
 RATE_LIMIT_ATTEMPTS = 3     # attempts per model on 429 before trying the next model
 RATE_LIMIT_BASE_DELAY = 2   # seconds; 2, 4, ... unless the API says how long to wait
@@ -61,6 +62,16 @@ def _candidate_models() -> list[str]:
     return models
 
 
+def _retry_hint_seconds(error: Exception) -> float | None:
+    """The RetryInfo "retryDelay" the API attached to an error, in seconds, if any."""
+    details = getattr(error, "details", None) or {}
+    for d in (details.get("error", {}) if isinstance(details, dict) else {}).get("details", []) or []:
+        m = re.fullmatch(r"(\d+(?:\.\d+)?)s", str(d.get("retryDelay", ""))) if isinstance(d, dict) else None
+        if m:
+            return float(m.group(1))
+    return None
+
+
 def _rate_limit_delay(error: Exception, attempt: int) -> float | None:
     """
     Seconds to wait after a 429: the API's RetryInfo hint if present, else
@@ -68,29 +79,41 @@ def _rate_limit_delay(error: Exception, attempt: int) -> float | None:
     hint is longer than RATE_LIMIT_SKIP_AFTER (a daily quota says "retry in
     21h"), meaning waiting on this model is pointless.
     """
-    delay = RATE_LIMIT_BASE_DELAY * 2 ** (attempt - 1)
-    details = getattr(error, "details", None) or {}
-    for d in (details.get("error", {}) if isinstance(details, dict) else {}).get("details", []) or []:
-        m = re.fullmatch(r"(\d+(?:\.\d+)?)s", str(d.get("retryDelay", ""))) if isinstance(d, dict) else None
-        if m:
-            delay = float(m.group(1))
-            if delay > RATE_LIMIT_SKIP_AFTER:
-                return None
+    hint = _retry_hint_seconds(error)
+    if hint is not None and hint > RATE_LIMIT_SKIP_AFTER:
+        return None
+    delay = hint if hint is not None else RATE_LIMIT_BASE_DELAY * 2 ** (attempt - 1)
     return min(delay, RATE_LIMIT_MAX_DELAY)
+
+
+def _short_reason(error: Exception) -> str:
+    """'503 UNAVAILABLE', '429 RESOURCE_EXHAUSTED (quota; retry in 19h9m)', or the exception text."""
+    code, status = getattr(error, "code", None), getattr(error, "status", None)
+    if code is None:
+        return str(error)[:120]
+    reason = f"{code} {status or ''}".strip()
+    hint = _retry_hint_seconds(error)
+    if code == 429 and hint is not None and hint > RATE_LIMIT_SKIP_AFTER:
+        h, m = divmod(int(hint) // 60, 60)
+        reason += f" (quota; retry in {h}h{m}m)"
+    return reason
 
 
 def generate_text(prompt: str, temperature: float = 0.3) -> str:
     """
     Sends a single prompt to Gemini and returns the raw text response.
-    Per model: a 429 (rate limit) is retried with backoff up to
-    RATE_LIMIT_ATTEMPTS times, a 503 up to MAX_RETRIES_PER_MODEL times;
-    a 404 (retired name), other 4xx errors, an empty reply, or exhausted
-    retries move on to the next model in FALLBACK_MODELS.
+    Per model: a 503 (demand spike) is retried up to SERVER_ERROR_ATTEMPTS
+    times with 2, 4, 8 s waits (at most SERVER_ERROR_MAX_TOTAL_WAIT seconds
+    in total); a 429 (rate limit) up to RATE_LIMIT_ATTEMPTS times, unless it
+    is a long quota; a 404 (retired name), other 4xx errors, an empty reply,
+    or exhausted retries move on to the next model in FALLBACK_MODELS.
+    If every model fails, the error lists every attempt with its model and
+    reason, so a primary-model 503 is not hidden behind a fallback's 429.
     """
-    last_error = None
+    attempts: list[str] = []
 
     for model_name in _candidate_models():
-        attempt = 0
+        attempt, waited = 0, 0.0
         while True:
             attempt += 1
             try:
@@ -104,14 +127,14 @@ def generate_text(prompt: str, temperature: float = 0.3) -> str:
                     # Empty/blocked response (e.g. safety filter) - treat it like a
                     # failure of this model and try the next one instead of crashing
                     # later when the JSON parser receives None.
-                    last_error = RuntimeError(f"{model_name} returned an empty response")
+                    attempts.append(f"{model_name}: empty response")
                     break
                 calls = _models_used.get()
                 if calls is not None:
                     calls.append(model_name)
                 return text
             except genai_errors.ClientError as e:
-                last_error = e
+                attempts.append(f"{model_name}: {_short_reason(e)}")
                 if getattr(e, "code", None) == 429 and attempt < RATE_LIMIT_ATTEMPTS:
                     delay = _rate_limit_delay(e, attempt)
                     if delay is not None:
@@ -119,16 +142,16 @@ def generate_text(prompt: str, temperature: float = 0.3) -> str:
                         continue
                 break  # 404 / other 4xx / long quota / rate limit still hit: try the next model
             except genai_errors.ServerError as e:
-                last_error = e
-                if attempt < MAX_RETRIES_PER_MODEL:
-                    time.sleep(RETRY_DELAY_SECONDS * attempt)
+                attempts.append(f"{model_name}: {_short_reason(e)}")
+                delay = SERVER_ERROR_BASE_DELAY * 2 ** (attempt - 1)
+                if attempt < SERVER_ERROR_ATTEMPTS and waited + delay <= SERVER_ERROR_MAX_TOTAL_WAIT:
+                    time.sleep(delay)
+                    waited += delay
                     continue
                 break
 
-    raise RuntimeError(
-        f"Gemini API failed across all candidate models {_candidate_models()}: {last_error}"
-    )
-
+    listing = "; ".join(f"{i}. {a}" for i, a in enumerate(attempts, start=1))
+    raise RuntimeError(f"Gemini API failed across all candidate models ({len(attempts)} attempts): {listing}")
 
 if __name__ == "__main__":
     with track_models() as used:

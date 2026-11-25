@@ -24,6 +24,7 @@ from app.agents.requirement_agent import extract_requirements
 from app.agents.compliance_agent import analyze_compliance, attach_regulations
 from app.agents.quality_agent import analyze_quality
 from app.agents.risk_agent import build_risk_register
+from app.agents.workflow_agent import generate_workflow
 from app.agents.sdlc_agent import recommend_sdlc
 
 app = FastAPI(title="Requora AI - Requirements Engineering & SDLC Recommendation API")
@@ -239,7 +240,7 @@ def run_full_pipeline(body: ScenarioRequest):
     Order: requirements -> compliance + per-requirement compliance mapping
     (then each requirement's applicable_regulations is filled from the
     domain-specific sources cited for it) -> quality checks -> risk register
-    -> SDLC recommendation. 6 LLM calls.
+    -> SDLC recommendation -> workflow for the recommended model. 7 LLM calls.
     """
     _check_scenario(body.scenario)
     answers = _check_answers(body.answers)
@@ -291,6 +292,16 @@ def run_full_pipeline(body: ScenarioRequest):
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"Agent 2 failed: {e}")
 
+        try:
+            sdlc_workflow = generate_workflow(
+                model=sdlc_result["recommended_model"],
+                domain=requirements.get("domain_inferred", "Unknown"),
+                requirements=requirements.get("functional_requirements", []) + requirements.get("non_functional_requirements", []),
+                compliance_mapping=compliance_mapping, risk_register=risk_register,
+            )
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Workflow generator failed: {e}")
+
     return {
         "scenario": body.scenario,
         "requirements": requirements,
@@ -299,6 +310,7 @@ def run_full_pipeline(body: ScenarioRequest):
         "quality": quality_result,
         "risk_register": risk_register,
         "sdlc_recommendation": sdlc_result,
+        "sdlc_workflow": sdlc_workflow,
         "meta": _meta(used),
     }
 

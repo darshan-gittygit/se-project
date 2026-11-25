@@ -17,12 +17,15 @@ flowchart LR
     M --> R[Risk register<br/>likelihood x impact]
     Q --> R
     B --> D[Agent 2<br/>SDLC trait extraction]
-    D --> E[Deterministic scoring engine<br/>9 traits x 5 model profiles]
-    E --> F[Recommendation + justification<br/>+ why-not explanations]
+    D --> E[Deterministic scoring engine<br/>15 traits x 7 model profiles]
+    E --> F[Ranked recommendation + justification<br/>+ why-not + approvers]
+    F --> W[Workflow generator<br/>base phases + scenario additions]
+    M -.-> W
+    R -.-> W
     C -. shown as Stage 2 in the UI .-> F
 ```
 
-In the UI the stages run as three separate calls: `/agents/requirements`, `/agents/compliance`, `/agents/sdlc`. The interview (`/agents/interview`, `/agents/interview/templates`) and quality check (`/agents/quality`) are API-only for now. `/agents/pipeline` runs requirements -> compliance (+ mapping) -> quality -> risk register -> SDLC in one request (6 LLM calls) and returns all of them, with `compliance_mapping` and `risk_register` as top-level keys; it accepts the same optional interview `answers` as `/agents/requirements`.
+In the UI the stages run as three separate calls: `/agents/requirements`, `/agents/compliance`, `/agents/sdlc`. The interview (`/agents/interview`, `/agents/interview/templates`) and quality check (`/agents/quality`) are API-only for now. `/agents/pipeline` runs requirements -> compliance (+ mapping) -> quality -> risk register -> SDLC -> workflow in one request (7 LLM calls) and returns all of them, with `compliance_mapping`, `risk_register` and `sdlc_workflow` as top-level keys; it accepts the same optional interview `answers` as `/agents/requirements`.
 
 Note: the compliance result is displayed to the user but is not currently fed into the SDLC trait extraction. Both agents work from the same requirement list. Feeding compliance findings into criticality/verification scoring is a possible future improvement.
 
@@ -40,9 +43,10 @@ Note: the compliance result is displayed to the user but is not currently fed in
 | Compliance agent | `app/agents/compliance_agent.py` | One retrieval query per requirement, keep chunks under the threshold, compute `kb_relevance`, ground findings only in kept chunks, drop unsupported citations, report risk level |
 | Output schemas | `app/schemas.py` (+ interview/quality modules) | Pydantic schemas for every LLM reply; validate, retry once, else 502 |
 | SDLC agent | `app/agents/sdlc_agent.py` | Rubric-anchored trait extraction (with evidence), call scoring engine, write justification |
-| Scoring engine | `app/agents/sdlc_rules.py` | Deterministic scoring of 5 SDLC models, close-call detection, why-not explanations |
+| Scoring engine | `app/agents/sdlc_rules.py` | Deterministic scoring of 7 SDLC models on 15 traits, close-call detection, why-not explanations |
+| Workflow generator | `app/agents/sdlc_workflows.py`, `workflow_agent.py` | Base phases per model (plain data, section 15 fields); one LLM call adds scenario-specific items |
 | RAG | `app/rag/` | Gemini embeddings, ChromaDB ingestion and retrieval |
-| Gemini client | `app/gemini_client.py` | Single place for model calls: backoff on 429, retry on 503, fallback across models on 404/empty; records which model answered (reported as `meta.model`) |
+| Gemini client | `app/gemini_client.py` | Single place for model calls: backoff on 429, up to 4 attempts on 503 (2, 4, 8 s waits, at most 15 s), fallback across models on 404/empty; when every model fails the error lists each attempt; records which model answered (reported as `meta.model`) |
 | API + UI | `app/main.py`, `app/static/` | FastAPI routes; single-page dashboard |
 
 ## Class diagram (logical)
@@ -73,27 +77,70 @@ classDiagram
 
 ## SDLC scoring methodology
 
-1. The LLM rates the project on 9 traits (1-5) at temperature 0. The reply must contain all nine traits as integers 1-5 with evidence and a reason (`TraitRatings` in `app/schemas.py`); otherwise it is retried once and then rejected. A trait is never defaulted, because a silent 3 would push the result toward Incremental. It is given explicit rubric anchors for every trait and must cite evidence from the requirements (and from the original scenario text, which `/agents/sdlc` accepts as an optional `scenario` field) for each score. It does not choose the SDLC model.
-2. Each model has a documented "ideal profile" over the same 9 traits. A model's compatibility score is `100 * (1 - weighted_distance / max_weighted_distance)`, where `weighted_distance = sum(weight[t] * |project[t] - profile[t]|)`. Every model is scored by the same formula with no per-model bonus (a test checks that each model scores exactly 100 on its own profile). That is not the same as equal win share: over all 5^9 possible trait vectors Incremental ranks first 39.7% of the time and Waterfall 8.5%, because Incremental's profile sits nearest the middle of the scale. See [Scoring analysis](#scoring-analysis).
-3. The top model is recommended. Models are ranked on unrounded scores, never on the order the profiles are listed in. Two scores within 0.05 are a tie, broken by the smaller worst single-trait gap, then the smaller total unweighted gap, then alphabetical order; a tie is always a close call and the UI says so. If the runner-up is within 5.0 points the UI reports a close comparison instead of a decisive winner.
+1. The LLM rates the project on 15 traits (1-5) at temperature 0. The reply must contain all fifteen traits as integers 1-5 with evidence and a reason (`TraitRatings` in `app/schemas.py`); otherwise it is retried once and then rejected. A trait is never defaulted, because a silent 3 would push the result toward Incremental. It is given explicit rubric anchors for every trait and must cite evidence from the requirements (and from the original scenario text, which `/agents/sdlc` accepts as an optional `scenario` field) for each score. It does not choose the SDLC model.
+2. Each of the seven models (Waterfall, V-Model, Incremental, Agile, Spiral, DevSecOps, Agile-V) has a documented "ideal profile" over the same 15 traits. A model's compatibility score is `100 * (1 - weighted_distance / max_weighted_distance)`, where `weighted_distance = sum(weight[t] * |project[t] - profile[t]|)`. Every model is scored by the same formula with no per-model bonus (a test checks that each model scores exactly 100 on its own profile). That is not the same as equal win share: in a uniform sample of the 15-trait space Incremental ranks first 31.1% of the time and V-Model 5.4%, because Incremental's profile sits nearest the middle of the scale. See [Scoring analysis](#scoring-analysis).
+3. All seven models are returned ranked (`rank`), each with its score as a percentage label (`percent`, e.g. "77.8%"; section 14's "ranked recommendations"; a compatibility score, not a probability). The top model is recommended. Models are ranked on unrounded scores, never on the order the profiles are listed in. Two scores within 0.05 are a tie, broken by the smaller worst single-trait gap, then the smaller total unweighted gap, then alphabetical order; a tie is always a close call and the UI says so. If the runner-up is within 5.0 points the UI reports a close comparison instead of a decisive winner.
 4. The LLM writes the justification from the measured scores and evidence, and is instructed never to contradict a score.
-5. "Why not X?" text is generated by rules from the same distances, with no LLM call.
+5. "Why not X?" text is generated by rules from the same distances, with no LLM call, for every lower-ranked model.
+6. `approval_required` lists the section 14 approvers (project manager, architect, security team, compliance officer) with status `pending`. It is a note; nothing records the approval yet.
 
-Why 9 traits: with only clarity, volatility, complexity and criticality, Spiral and V-Model had near-identical profiles and Spiral won most high-stakes scenarios. `risk_uncertainty` (novelty, not stakes) separates Spiral from V-Model; `verification_validation` separates V-Model from Waterfall; `stakeholder_feedback` separates Agile from Incremental; `incremental_suitability` and `prototyping_need` separate the iterative models from the rest.
+Why these traits: with only clarity, volatility, complexity and criticality, Spiral and V-Model had near-identical profiles and Spiral won most high-stakes scenarios. `risk_uncertainty` (novelty, not stakes) separates Spiral from V-Model; `verification_validation` separates V-Model from Waterfall; `stakeholder_feedback` separates Agile from Incremental; `incremental_suitability` and `prototyping_need` separate the iterative models from the rest. Phase 3 added six traits for section 13 factors the nine did not cover (next section).
+
+### SDLC decision factors (problem statement section 13)
+
+| Section 13 factor | Trait(s) |
+|---|---|
+| Requirement stability | requirement clarity, requirement volatility |
+| Regulatory criticality | project criticality (its anchors include regulatory consequences) and verification & validation intensity (traceability); not a separate trait |
+| Security risk | **security risk** (new) |
+| Project complexity | project complexity |
+| System size | **system size** (new; complexity measures structure, not scale) |
+| Legacy-system dependence | **legacy-system dependence** (new) |
+| Frequency of expected changes | requirement volatility |
+| Need for continuous delivery | **need for continuous delivery** (new; incremental suitability means releasable slices, not deployment frequency) |
+| Availability of stakeholders | **stakeholder availability** (new; stakeholder feedback measures need, not availability) |
+| Testing and documentation requirements | verification & validation intensity (rubric now names documentation) |
+| Budget and schedule constraints | **budget and schedule constraint** (new) |
+| Need for formal verification | verification & validation intensity (anchor 5 names formal verification) |
+| Consequences of system failure | project criticality |
+
+Every new trait has a 1-5 anchored rubric in `TRAIT_RUBRICS` and the same evidence/reason/strict-schema rules as the others.
 
 ### Profiles and weights (generated from `sdlc_rules.py`)
 
-| Trait | Weight | Waterfall | V-Model | Incremental | Agile | Spiral |
-|---|---|---|---|---|---|---|
-| requirement clarity | 1.0 | 5 | 5 | 3 | 2 | 3 |
-| requirement volatility | 1.2 | 1 | 1 | 3 | 5 | 3 |
-| project complexity | 0.8 | 2 | 3 | 3 | 3 | 5 |
-| project criticality | 1.0 | 2 | 5 | 2 | 2 | 5 |
-| risk/uncertainty | 1.3 | 1 | 2 | 2 | 2 | 5 |
-| verification & validation intensity | 1.1 | 2 | 5 | 2 | 1 | 3 |
-| stakeholder feedback need | 1.2 | 1 | 1 | 3 | 5 | 2 |
-| incremental delivery suitability | 1.0 | 1 | 1 | 5 | 5 | 2 |
-| prototyping/experimentation need | 1.1 | 1 | 1 | 2 | 2 | 5 |
+| Trait | Weight | Waterfall | V-Model | Incremental | Agile | Spiral | DevSecOps | Agile-V |
+|---|---|---|---|---|---|---|---|---|
+| requirement clarity | 1.0 | 5 | 5 | 3 | 2 | 3 | 3 | 3 |
+| requirement volatility | 1.2 | 1 | 1 | 3 | 5 | 3 | 4 | 4 |
+| project complexity | 0.8 | 2 | 3 | 3 | 3 | 5 | 4 | 3 |
+| project criticality | 1.0 | 2 | 5 | 2 | 2 | 5 | 4 | 5 |
+| risk/uncertainty | 1.3 | 1 | 2 | 2 | 2 | 5 | 2 | 2 |
+| verification & validation intensity | 1.1 | 2 | 5 | 2 | 1 | 3 | 4 | 5 |
+| stakeholder feedback need | 1.2 | 1 | 1 | 3 | 5 | 2 | 4 | 4 |
+| incremental delivery suitability | 1.0 | 1 | 1 | 5 | 5 | 2 | 5 | 4 |
+| prototyping/experimentation need | 1.1 | 1 | 1 | 2 | 2 | 5 | 2 | 2 |
+| security risk | 1.0 | 3 | 3 | 3 | 3 | 3 | 5 | 4 |
+| system size | 0.6 | 2 | 4 | 4 | 2 | 5 | 3 | 4 |
+| legacy-system dependence | 0.8 | 3 | 4 | 4 | 2 | 4 | 2 | 3 |
+| need for continuous delivery | 1.2 | 1 | 1 | 3 | 4 | 2 | 5 | 3 |
+| stakeholder availability | 0.8 | 2 | 2 | 3 | 5 | 3 | 4 | 4 |
+| budget and schedule constraint | 0.6 | 4 | 3 | 4 | 3 | 1 | 3 | 2 |
+
+Reasoning for the Phase 3 values (fixed before any results were computed, not tuned afterwards):
+
+- **DevSecOps** (section 14: "continuous secure deployment"): security risk 5 and continuous delivery 5 are its defining values; otherwise Agile-like (volatility 4, feedback 4, incremental 5) but with criticality 4 and V&V 4 because security testing is automated in the pipeline; legacy dependence 2 because frequent automated deployment is hard on tightly coupled legacy systems.
+- **Agile-V** (section 14: "high regulation with evolving requirements"): V-Model's criticality 5 and V&V 5 combined with Agile-leaning volatility 4, feedback 4 and incremental 4; budget/schedule 2 because running sprints and V-level verification together is the most overhead-heavy option.
+- **Security risk**: 3 (no particular stance) for the five original models; DevSecOps 5, Agile-V 4.
+- **System size**: Waterfall and Agile 2 (single team), V-Model, Incremental and Agile-V 4 (decomposed large systems), Spiral 5 (large high-risk programmes, its original purpose), DevSecOps 3.
+- **Legacy-system dependence**: 4 for V-Model (interfaces verified level by level), Incremental (stepwise migration) and Spiral (integration risk analysis); 2 for Agile and DevSecOps; 3 otherwise.
+- **Continuous delivery**: Waterfall and V-Model 1, Spiral 2, Incremental and Agile-V 3, Agile 4, DevSecOps 5.
+- **Stakeholder availability**: Waterfall and V-Model 2 (milestone sign-offs), Incremental and Spiral 3, DevSecOps and Agile-V 4, Agile 5.
+- **Budget and schedule constraint**: Spiral 1 (open-ended risk cycles), Agile-V 2, V-Model, Agile and DevSecOps 3, Waterfall and Incremental 4 (fixed-scope planning; early value under a deadline).
+- **Weights**: continuous delivery 1.2 (it separates DevSecOps and Agile from the plan-driven models, like volatility), security risk 1.0, legacy dependence and availability 0.8, size and budget/schedule 0.6 (the weakest link to model choice).
+
+## Workflow (problem statement section 15)
+
+`sdlc_workflow` (pipeline only) customises the recommended model. Its base phases come from plain data in `app/agents/sdlc_workflows.py`: 4-7 phases per model, each with the ten section-15 fields (`activities`, `responsible_roles`, `deliverables`, `security_activities`, `testing_requirements`, `compliance_checkpoints`, `approval_gates`, `entry_criteria`, `exit_criteria`, `traceability_requirements`). Approval gates follow section 16's mandatory approvals; every model has a production-readiness gate. One LLM call (`workflow_agent.py`) sees the requirements, compliance gaps/checkpoints and top risks and may only add items: each addition names an existing phase (renamed or invented phases fail validation), one of the ten fields, a short item, the requirement ids it serves and a reason. Additions that repeat a base item, unknown ids and more than 25 additions are rejected; retry once, then 502. Every item in the result is `{"text", "source": "base" | "scenario", "requirement_ids"}`.
 
 ## Compliance retrieval
 
@@ -140,8 +187,9 @@ Requirement `risk_level` (Agent 1) now has anchors too. In the Phase 1 loan run 
 
 [docs/SCORING_ANALYSIS.md](SCORING_ANALYSIS.md) is generated by `python -m scripts.sensitivity --write` (offline).
 
-- **Win share.** Over all 1,953,125 trait vectors: Incremental 39.7%, Spiral 28.2%, Agile 13.5%, V-Model 10.0%, Waterfall 8.5%. Central profiles are closer to everything. This describes the profile geometry, not how often each model should be recommended, and the profiles were not tuned to equalise it.
-- **Sensitivity.** For the four live evaluation trait vectors, no single weight change (+/-0.2, x0.5, x1.5) or profile-cell change (+/-1) changes the winner (104 variants each). The only single-rating changes that flip a result are payroll's criticality or V&V one point lower (V-Model to Waterfall; payroll's margin is 4.1, a close call).
+- **Win share** (seeded sample of 1,000,000 vectors; 5^15 is too many to enumerate): Incremental 31.1%, Spiral 18.4%, Agile-V 16.6%, DevSecOps 11.8%, Agile 9.1%, Waterfall 7.6%, V-Model 5.4%. Central profiles are closer to everything. This describes the profile geometry, not how often each model should be recommended, and the profiles were not tuned to equalise it.
+- **Sensitivity.** Reference projects are the four live 9-trait vectors plus hand ratings of the six new traits (`scripts/sensitivity.py` `NEW_TRAITS`). No winner changes under any single weight change (30 variants each). Social media and railway do not flip at all. Payroll (V-Model, +2.4) flips to Waterfall if complexity, criticality or V&V is rated one point lower. Food delivery (DevSecOps, +2.0) flips back to Incremental under 7 of 29 single-rating changes and 2 of 178 profile-cell changes, so it is a close call.
+- **Winners before and after Phase 3** (same four reference vectors): social media Agile -> Agile, payroll V-Model -> V-Model, railway V-Model -> V-Model, food delivery Incremental -> **DevSecOps** (86.9 vs Incremental 84.9). With the six new traits all set to 3, food delivery stays Incremental, so the change comes from its security-risk 4 and continuous-delivery 4 ratings.
 
 ## Requirement records
 
@@ -189,5 +237,8 @@ Whatever the LLM sends for the code-set fields is overwritten, so it cannot appr
 - `approval_status` is always `proposed`: there is no human accept/reject/modify step yet.
 - Similarity alone cannot tell which domain a principle belongs to; two rules now compensate. Generic-baseline matches never count toward `kb_relevance`, and sources only apply to the domains listed in `knowledge_base/sources.json` (so payroll's and social media's matches to the KYC/AML logging paragraph no longer count or get cited). The domain classifier is keyword-based: a scenario that never uses the expected words (e.g. a lending system described only as "advances to customers") gets no tags, and its domain-specific sources are excluded. The tags are in the response so a reviewer can see this.
 - In the Phase 2 live loan run, 4 of 8 requirements were flagged for review, all because their best match fell in the then-Low band 0.55-0.62, although the matches were correct (e.g. fair_lending for decline reasons at 0.58). The tuning data showed every citable pair in that range was correct, so Medium was widened to 0.60; re-grading that run's saved mapping gives 1 of 8 (only the 0.62 audit-log match). The evidence is 7 labelled pairs from one labeller.
+- Adding six traits dilutes the defining traits of each model. The hand-written food-delivery test vector (V&V 2, criticality 3) now picks Agile-V (87.6) over DevSecOps (85.7), although Agile-V is defined by criticality 5 and V&V 5: those two traits carry 2.1 of the 14.7 total weight, and Agile-V matches the vector on most new traits. Results for mid-range projects can therefore sit in a close cluster of DevSecOps, Agile-V and Incremental; the close-call flag shows this.
+- The six new traits have not been extracted live yet (quota); their reference values are hand ratings.
+- Workflow additions are LLM output checked only for structure (existing phase, field, known ids, no repeats); whether an addition is sensible is not measured.
 - Compliance `status`, the required control and the risk register's likelihood and impact are LLM judgements, checked only for allowed values and (for evidence) quotes; their accuracy is not measured. The confidence bands come from a small single-labeller tuning set.
 - No confidence percentages are shown, because none are computed.

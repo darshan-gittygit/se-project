@@ -70,7 +70,7 @@ def test_sdlc_endpoint_returns_502_not_an_incremental_default(monkeypatch):
     # Before this fix every missing trait became 3, and an all-3 project
     # recommends Incremental (83.2) - so a broken reply looked like a result.
     def llm(prompt, temperature=0.3):
-        if "9 characteristics" in prompt:
+        if "rating project characteristics" in prompt:
             return json.dumps({"clarity": GOOD["clarity"]})
         return json.dumps(JUSTIFICATION)
     monkeypatch.setattr(sdlc_mod, "generate_text", llm)

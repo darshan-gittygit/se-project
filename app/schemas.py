@@ -236,7 +236,7 @@ class TraitRating(_NonEmptyText):
 
 
 class TraitRatings(BaseModel):
-    """All nine traits are required; a missing or invalid one is an error."""
+    """All fifteen traits are required; a missing or invalid one is an error."""
     clarity: TraitRating
     volatility: TraitRating
     complexity: TraitRating
@@ -246,6 +246,12 @@ class TraitRatings(BaseModel):
     stakeholder_feedback: TraitRating
     incremental_suitability: TraitRating
     prototyping_need: TraitRating
+    security_risk: TraitRating
+    system_size: TraitRating
+    legacy_dependence: TraitRating
+    continuous_delivery: TraitRating
+    stakeholder_availability: TraitRating
+    budget_schedule_constraint: TraitRating
 
 
 # --- Agent 2: SDLC justification -------------------------------------------

@@ -25,8 +25,21 @@ from app.agents import sdlc_rules
 
 OUT = Path(__file__).resolve().parent.parent / "docs" / "SCORING_ANALYSIS.md"
 
-# Trait vectors Agent 2 produced live for the four evaluation scenarios
-# (docs/EVALUATION_BASELINE.md, 2026-11-25, first run of each).
+# The first nine traits of each vector are what Agent 2 produced live for the
+# four evaluation scenarios (docs/EVALUATION_BASELINE.md, 2026-11-25, first run
+# of each). The six Phase 3 traits did not exist then; NEW_TRAITS are hand
+# ratings from the scenario texts against the new rubrics (unstated budget or
+# schedule = 2, "target dates"), not live LLM output.
+NEW_TRAITS = {
+    "social media": {"security_risk": 3, "system_size": 3, "legacy_dependence": 1, "continuous_delivery": 5,
+                     "stakeholder_availability": 4, "budget_schedule_constraint": 2},
+    "payroll": {"security_risk": 4, "system_size": 3, "legacy_dependence": 3, "continuous_delivery": 1,
+                "stakeholder_availability": 2, "budget_schedule_constraint": 2},
+    "railway": {"security_risk": 5, "system_size": 4, "legacy_dependence": 4, "continuous_delivery": 1,
+                "stakeholder_availability": 2, "budget_schedule_constraint": 2},
+    "food delivery": {"security_risk": 4, "system_size": 4, "legacy_dependence": 2, "continuous_delivery": 4,
+                      "stakeholder_availability": 4, "budget_schedule_constraint": 2},
+}
 REFERENCES = {
     "social media": {"clarity": 2, "volatility": 5, "complexity": 4, "criticality": 1, "risk_uncertainty": 2,
                      "verification_validation": 2, "stakeholder_feedback": 5, "incremental_suitability": 5,
@@ -41,6 +54,7 @@ REFERENCES = {
                       "verification_validation": 3, "stakeholder_feedback": 4, "incremental_suitability": 5,
                       "prototyping_need": 2},
 }
+REFERENCES = {name: {**traits, **NEW_TRAITS[name]} for name, traits in REFERENCES.items()}
 
 
 @contextmanager
@@ -110,8 +124,8 @@ def report() -> str:
     res = analyse()
     families = sorted({f for r in res.values() for f in r["families"]})
     lines = ["## Sensitivity: does one change flip the recommendation?", "",
-             "Reference projects are the trait vectors Agent 2 produced live for the four evaluation "
-             "scenarios. Each cell is flips / variants tried (`python -m scripts.sensitivity`).", "",
+             "Reference projects: the nine traits Agent 2 produced live for the four evaluation scenarios, plus "
+             "hand ratings of the six Phase 3 traits (`NEW_TRAITS`). Each cell is flips / variants tried (`python -m scripts.sensitivity`).", "",
              "| Project | Winner (margin over runner-up) | " + " | ".join(families) + " |",
              "|---|---|" + "---|" * len(families)]
     for ref, r in res.items():

@@ -9,7 +9,7 @@ from google.genai import errors as genai_errors
 
 import app.gemini_client as gc
 from app.main import MAX_SCENARIO_CHARS, MAX_REQUIREMENTS_PER_LIST, app
-from tests.helpers import RISK_PROMPT_MARKER, record, risk_reply
+from tests.helpers import RISK_PROMPT_MARKER, WORKFLOW_PROMPT_MARKER, record, risk_reply
 
 client = TestClient(app)
 PRIMARY, FALLBACK = gc._candidate_models()[0], gc._candidate_models()[1]
@@ -17,9 +17,9 @@ PRIMARY, FALLBACK = gc._candidate_models()[0], gc._candidate_models()[1]
 REQS = {"domain_inferred": "Payroll", "assumptions": [],
         "functional_requirements": [record("FR-1", "Calculate salaries.")],
         "non_functional_requirements": [record("NFR-1", "Audit trail.")]}
-TRAITS = {k: {"score": 3, "evidence": "e", "reason": "r"} for k in (
-    "clarity", "volatility", "complexity", "criticality", "risk_uncertainty",
-    "verification_validation", "stakeholder_feedback", "incremental_suitability", "prototyping_need")}
+from app.agents.sdlc_agent import TRAIT_KEYS
+
+TRAITS = {k: {"score": 3, "evidence": "e", "reason": "r"} for k in TRAIT_KEYS}
 JUSTIFICATION = {"requirement_characteristics": "a", "project_characteristics": "b",
                  "engineering_justification": "c", "key_tradeoffs": "d"}
 BODY = {"domain": "Payroll", "functional_requirements": REQS["functional_requirements"],
@@ -42,7 +42,9 @@ def reply_for(prompt):
         return json.dumps(REQS)
     if RISK_PROMPT_MARKER in prompt:
         return risk_reply()
-    if "9 characteristics" in prompt:
+    if WORKFLOW_PROMPT_MARKER in prompt:
+        return json.dumps({"additions": []})
+    if "rating project characteristics" in prompt:
         return json.dumps(TRAITS)
     return json.dumps(JUSTIFICATION)
 
@@ -92,8 +94,9 @@ def test_pipeline_has_meta_for_all_calls(fake_sdk, monkeypatch):
         json.dumps({"risk_level": "Low", "considerations": [], "summary": "s"})
         if "compliance and risk analyst" in prompt else reply_for(prompt))
     d = client.post("/agents/pipeline", json={"scenario": "A payroll system for a company"}).json()
-    assert d["meta"]["models_used"] == [PRIMARY] * 6  # requirements, compliance, conflicts, risks, traits, justification
-    assert {"scenario", "requirements", "compliance", "compliance_mapping", "quality", "risk_register", "sdlc_recommendation"} <= set(d)
+    assert d["meta"]["models_used"] == [PRIMARY] * 7  # requirements, compliance, conflicts, risks, traits, justification, workflow
+    assert {"scenario", "requirements", "compliance", "compliance_mapping", "quality", "risk_register",
+            "sdlc_recommendation", "sdlc_workflow"} <= set(d)
 
 
 def test_tracking_does_not_leak_between_requests(fake_sdk):
@@ -196,3 +199,71 @@ def test_oversized_requirement_bodies_are_rejected(fake_sdk, path, change):
 def test_test_gemini_route_is_gone():
     assert client.get("/test-gemini").status_code == 404
     assert "/test-gemini" not in client.get("/openapi.json").json()["paths"]
+
+
+# --- Phase 3 step 0: 503 retry policy and the all-models-failed message ------
+
+QUOTA_HINT = [{"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "68956s"}]
+
+
+def test_503_is_retried_four_times_with_2_4_8_second_waits(fake_sdk):
+    def behaviour(model, prompt, n):
+        if n <= 3:
+            raise api_error(genai_errors.ServerError, 503, "UNAVAILABLE")
+        return "ok"
+    fake_sdk["behaviour"] = behaviour
+    assert gc.generate_text("hi") == "ok"
+    assert fake_sdk["tried"] == [PRIMARY] * 4 and fake_sdk["sleeps"] == [2, 4, 8]
+    assert sum(fake_sdk["sleeps"]) <= gc.SERVER_ERROR_MAX_TOTAL_WAIT
+
+
+def test_persistent_503_falls_back_after_four_attempts(fake_sdk):
+    def behaviour(model, prompt, n):
+        if model == PRIMARY:
+            raise api_error(genai_errors.ServerError, 503, "UNAVAILABLE")
+        return "ok"
+    fake_sdk["behaviour"] = behaviour
+    assert gc.generate_text("hi") == "ok"
+    assert fake_sdk["tried"] == [PRIMARY] * 4 + [FALLBACK] and fake_sdk["sleeps"] == [2, 4, 8]
+
+
+def test_503_total_wait_cap_is_respected(fake_sdk, monkeypatch):
+    monkeypatch.setattr(gc, "SERVER_ERROR_MAX_TOTAL_WAIT", 6)  # allows 2 + 4, not the 8
+    fake_sdk["behaviour"] = lambda model, prompt, n: (_ for _ in ()).throw(api_error(genai_errors.ServerError, 503, "UNAVAILABLE")) \
+        if model == PRIMARY else "ok"
+    gc.generate_text("hi")
+    assert fake_sdk["tried"][:3] == [PRIMARY] * 3 and fake_sdk["sleeps"] == [2, 4]
+
+
+def test_all_models_failed_message_lists_every_attempt(fake_sdk):
+    # The live failure: primary 503s, both fallbacks out of daily quota. The old
+    # message showed only the last 429 and hid that the primary still had quota.
+    def behaviour(model, prompt, n):
+        if model == PRIMARY:
+            raise api_error(genai_errors.ServerError, 503, "UNAVAILABLE")
+        raise api_error(genai_errors.ClientError, 429, "RESOURCE_EXHAUSTED", details=QUOTA_HINT)
+    fake_sdk["behaviour"] = behaviour
+    with pytest.raises(RuntimeError) as exc:
+        gc.generate_text("hi")
+    msg = str(exc.value)
+    models = gc._candidate_models()
+    assert msg.startswith(f"Gemini API failed across all candidate models ({4 + len(models) - 1} attempts): ")
+    for i in range(1, 5):
+        assert f"{i}. {PRIMARY}: 503 UNAVAILABLE" in msg
+    for i, m in enumerate(models[1:], start=5):
+        assert f"{i}. {m}: 429 RESOURCE_EXHAUSTED (quota; retry in 19h9m)" in msg
+
+
+def test_all_models_failed_message_reaches_the_502_detail(fake_sdk):
+    fake_sdk["behaviour"] = lambda model, prompt, n: (_ for _ in ()).throw(
+        api_error(genai_errors.ClientError, 404, "NOT_FOUND"))
+    r = client.post("/agents/requirements", json={"scenario": "A payroll system for a company"})
+    assert r.status_code == 502
+    n = len(gc._candidate_models())
+    assert f"1. {PRIMARY}: 404 NOT_FOUND" in r.json()["detail"] and f"({n} attempts)" in r.json()["detail"]
+
+
+def test_empty_reply_is_listed_as_an_attempt(fake_sdk):
+    fake_sdk["behaviour"] = lambda model, prompt, n: None
+    with pytest.raises(RuntimeError, match=f"1. {PRIMARY}: empty response"):
+        gc.generate_text("hi")

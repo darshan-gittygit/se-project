@@ -16,7 +16,8 @@ Built by Darshan - NIT Karnataka, Surathkal (CS305 Software Engineering course p
 0. **Interview (optional, API only):** role-specific question templates for the 9 stakeholder roles in the problem statement, and an endpoint that returns the next follow-up questions from the answers collected so far.
 1. **Agent 1 (requirements):** functional and non-functional requirement records with the problem statement's fields: categories, source stakeholder, the exact source text, business justification, priority, dependencies, assumptions, acceptance criteria, risk level, confidence (computed) and approval status (`proposed`).
 2. **Agent 3 (compliance and risk):** runs one retrieval query per requirement against the knowledge base in `knowledge_base/` (ChromaDB + Gemini embeddings) and passes only chunks under a tuned distance threshold to the LLM. Whether the knowledge base covers the domain (`kb_relevance`) is computed from those distances using domain-specific sources only; the domain-agnostic security baseline can still be cited, labelled "generic baseline", but never counts as coverage. Any citation of a source that was not retrieved is dropped, so the panel can only cite what was actually retrieved.
-3. **Agent 2 (SDLC):** the LLM rates 9 project traits against fixed rubrics and must cite evidence; a deterministic engine scores Waterfall, V-Model, Incremental, Agile and Spiral; the LLM then explains the result. The LLM never picks the model.
+3. **Agent 2 (SDLC):** the LLM rates 15 project traits (covering the problem statement's 13 decision factors) against fixed rubrics and must cite evidence; a deterministic engine ranks Waterfall, V-Model, Incremental, Agile, Spiral, DevSecOps and the Agile-V hybrid with percentage scores; the LLM then explains the result. The LLM never picks the model, and the choice is marked as needing approval by the project manager, architect, security team and compliance officer.
+4. **Workflow (pipeline):** the recommended model's base phases (plain data, with activities, roles, deliverables, security activities, testing, compliance checkpoints, approval gates, entry/exit criteria and traceability) plus scenario-specific items one LLM call may add, linked to requirement IDs.
 
 **Compliance mapping and risk register (pipeline):** each requirement is mapped to the knowledge-base sources that apply to the scenario's domain, with jurisdiction, version, required control, verified evidence, satisfied/gap, graded confidence and a human-review flag; a threat and risk register scores likelihood x impact in code.
 
@@ -85,6 +86,8 @@ app/
     quality_agent.py         quality and conflict checks
     compliance_mapping.py    per-requirement compliance mapping, confidence, review flags
     risk_agent.py            threat and risk register
+    sdlc_workflows.py        base SDLC workflow phases per model (plain data)
+    workflow_agent.py        project-specific workflow additions
     compliance_agent.py      Agent 3 (RAG)
     sdlc_agent.py            Agent 2 (trait extraction + justification)
     sdlc_rules.py            deterministic SDLC scoring engine
@@ -107,7 +110,7 @@ docs/COVERAGE.md             problem-statement coverage plan: deliverable, phase
 |---|---|
 | `Internal Server Error` or an error panel in the UI | Read the terminal traceback - it names the real cause. |
 | `404 NOT_FOUND ... model is no longer available` | Google retired the model name. Put the replacement it names into `GEMINI_MODEL` in `.env`, and add it to `FALLBACK_MODELS` in `app/gemini_client.py`. Restart the server. |
-| `503 UNAVAILABLE` | Google-side demand spike. The client already retries and falls back; just try again. |
+| `503 UNAVAILABLE` | Google-side demand spike. The client retries the same model up to 4 times (2, 4, 8 s waits) and then falls back; if every model fails, the error lists each attempt, so you can see whether it was demand (503) or quota (429). |
 | `429 RESOURCE_EXHAUSTED` | Free-tier rate limit. The client waits and retries (up to 10 s per wait), then tries the next model; a daily-quota error ("retry in 21h") skips straight to the next model. If every model is exhausted, try again later or use another key. |
 | Check that the key and model work | `python -m app.gemini_client` sends one tiny prompt and prints which model answered. |
 | `Knowledge base not found` | Run `python -m app.rag.ingest`. |
