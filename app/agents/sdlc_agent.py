@@ -17,9 +17,13 @@ Pipeline:
 4. Deterministic "why not" explanations for every other model, reusing the
    same distance math from step 2.
 """
+import re
+
 from app.gemini_client import generate_text
 from app.json_utils import parse_json_response
-from app.agents.sdlc_rules import score_models, explain_mismatch, is_close_call
+from app.agents.sdlc_rules import (
+    score_models, explain_mismatch, is_close_call, top_two_tied, explain_tie_break, TRAIT_LABELS,
+)
 
 TRAIT_KEYS = [
     "clarity", "volatility", "complexity", "criticality",
@@ -36,21 +40,25 @@ TRAIT_KEYS = [
 # requirements. Anchored rubrics plus a required evidence quote close that
 # gap.
 TRAIT_RUBRICS = """
-REQUIREMENT CLARITY (how well-defined and unambiguous the requirements are)
-1 = Highly ambiguous, incomplete, or poorly understood.
-2 = Major aspects unclear; significant clarification needed.
-3 = Core requirements understood but some details uncertain.
-4 = Mostly well-defined with only minor ambiguity.
-5 = Explicitly defined, complete, and well understood.
+REQUIREMENT CLARITY (how settled the stakeholders' requirements are - NOT how neatly the list below is written)
+1 = Only a broad goal is known; the core features, users, or scope are not yet identified.
+2 = The goal and users are known, but which features to build is still open or is explicitly to be decided from user feedback, experiments, or usage data.
+3 = The core features are identified, but their business rules, acceptance criteria, or the scope of later features are left open or expected to be refined as the product evolves.
+4 = The core features and most business rules are specified; only minor details remain open.
+5 = Requirements are fully specified, with business rules defined by an approved specification, written policy, contract, standard, or regulation.
+The requirement list was written by an analyst from a short scenario, so it always looks tidy. Judge clarity from what it says about how settled the needs are (fixed rules and approvals vs. features to be discovered or refined), not from the wording quality, length, or number of requirements.
 
-REQUIREMENT VOLATILITY (how likely requirements are to change during development)
-1 = Expected to remain stable; changes are rare and formally controlled.
-2 = Minor changes may occur occasionally.
-3 = Moderate requirement changes expected during development.
-4 = Expected to change frequently due to feedback, market conditions, regulations, or evolving user needs.
-5 = Continuously evolving; substantial changes expected throughout development.
+REQUIREMENT VOLATILITY (how much the requirements are expected to change during development)
+1 = Requirements are stated to be fixed, formally approved, or governed by rules/regulations that change rarely and only through formal change control.
+2 = Requirements are largely settled; only occasional, planned changes are expected (e.g. periodic rule, rate, or configuration updates).
+3 = A fixed core scope with a planned roadmap of further features; change mostly takes the form of NEW features added in later releases, while existing features stay stable.
+4 = Existing features are expected to be modified, replaced, or dropped based on user feedback, usage data, or market response, but a recognisable core product is fixed.
+5 = The product direction itself is still being discovered (e.g. experiments, MVP to test fit, possible pivots); most features are expected to be reshaped repeatedly throughout development.
 Do NOT infer high volatility merely because a project is complex, serious, or has many requirements.
 A scenario that explicitly states requirements are stable, formally approved, or rarely changed MUST receive a LOW volatility score (1-2), regardless of how important or complex the project is.
+Planned feature ADDITIONS on top of a stable core are a 3; feedback-driven CHANGES to existing features are a 4; an undecided product direction is a 5.
+
+TIE-BREAK RULE FOR CLARITY AND VOLATILITY: each anchor above names the kind of evidence it requires. Choose the HIGHEST anchor whose required evidence is explicitly present in the scenario/domain/requirements; if you are torn between two adjacent anchors and the evidence for the higher one is not explicitly stated, choose the lower one. Never pick a score because projects in this domain "usually" work that way.
 
 PROJECT COMPLEXITY (system structure and technical difficulty, NOT the number of requirements)
 1 = Small, simple system with few components and dependencies.
@@ -92,6 +100,9 @@ TRAIT_PROMPT_TEMPLATE = """You are a software engineering process consultant rat
 
 {rubrics}
 
+Original scenario (the stakeholder's own words; the best evidence for how settled and how changeable the needs are):
+{scenario}
+
 Domain: {domain}
 
 Functional Requirements:
@@ -101,8 +112,8 @@ Non-Functional Requirements:
 {non_functional_list}
 
 Rules:
-- For each trait, pick the single rubric anchor (1-5) that best matches the evidence actually present in the requirements/domain above.
-- "evidence" must quote or closely paraphrase the specific part of the requirements/domain that justifies the score. If there is no direct evidence, say so explicitly and explain your inference cautiously.
+- For each trait, pick the single rubric anchor (1-5) that best matches the evidence actually present in the scenario/requirements/domain above.
+- "evidence" must quote or closely paraphrase the specific part of the scenario/requirements/domain that justifies the score. If there is no direct evidence, say so explicitly and explain your inference cautiously.
 - "reason" must be one sentence connecting the evidence to the chosen score.
 - Do NOT infer high volatility merely because the project is complex, serious, or safety-critical. Stable, formally-controlled requirements get LOW volatility even in high-stakes domains.
 - Do NOT infer high risk_uncertainty merely because criticality is high. A mature, well-understood engineering domain can be both high-criticality and low-risk/uncertainty.
@@ -136,10 +147,10 @@ Based on deterministic scoring against documented SDLC model profiles, the recom
 Key requirements driving this recommendation:
 {key_requirements}
 
-Write a structured justification broken into exactly these 4 sections. Each section should be 1-2 concise sentences, plain prose, no markdown formatting. CRITICAL: you must never describe a trait in a direction that contradicts its measured score - e.g. if volatility's score is 1 or 2, you must describe requirements as stable/low-change, never as "frequently changing" or "high volatility". If criticality is 5 but risk_uncertainty is low, do not blur the two together - they measure different things.
+Write a structured justification broken into exactly these 4 sections. Each section should be 1-2 concise sentences, plain prose, no markdown formatting. Refer to traits by their plain-English names exactly as written above (e.g. "risk/uncertainty", "requirement volatility"), never by identifiers with underscores. CRITICAL: you must never describe a trait in a direction that contradicts its measured score - e.g. if requirement volatility's score is 1 or 2, you must describe requirements as stable/low-change, never as "frequently changing" or "high volatility". If project criticality is 5 but risk/uncertainty is low, do not blur the two together - they measure different things.
 
-- requirement_characteristics: what the clarity/volatility scores (and their evidence) imply for how this project should be planned
-- project_characteristics: what the complexity/criticality/risk_uncertainty scores imply about the project's risk and technical profile
+- requirement_characteristics: what the requirement clarity and requirement volatility scores (and their evidence) imply for how this project should be planned
+- project_characteristics: what the project complexity, project criticality and risk/uncertainty scores imply about the project's risk and technical profile
 - engineering_justification: why {top_model} specifically fits these measured characteristics, referencing at least one specific requirement ID and at least one specific trait score
 - key_tradeoffs: one real trade-off or risk of choosing {top_model} for this project
 
@@ -153,25 +164,57 @@ def _format_requirements(reqs: list[dict]) -> str:
 
 
 def _format_trait_summary(trait_details: dict) -> str:
+    # Human labels, not internal keys: whatever the LLM sees here tends to be
+    # echoed verbatim into the user-facing justification.
     lines = []
     for key in TRAIT_KEYS:
         d = trait_details[key]
-        lines.append(f"- {key} = {d['score']}/5 (evidence: {d['evidence']} | reason: {d['reason']})")
+        lines.append(
+            f"- {TRAIT_LABELS[key]} = {d['score']}/5 "
+            f"(evidence: {_humanize(d['evidence'])} | reason: {_humanize(d['reason'])})"
+        )
     return "\n".join(lines)
 
 
-def analyze_traits(domain: str, functional_requirements: list[dict], non_functional_requirements: list[dict]) -> dict:
+# Matches internal trait identifiers that contain an underscore (e.g.
+# "risk_uncertainty"); single-word keys such as "clarity" are plain English.
+_RAW_TRAIT_KEY_RE = re.compile(
+    r"\b(" + "|".join(re.escape(k) for k in TRAIT_KEYS if "_" in k) + r")\b"
+)
+
+
+def _humanize(text):
+    """Replace internal trait keys in LLM text with their UI labels."""
+    if not isinstance(text, str):
+        return text
+    return _RAW_TRAIT_KEY_RE.sub(lambda m: TRAIT_LABELS[m.group(1)], text)
+
+
+def _humanize_trait_keys(justification: dict) -> dict:
+    """Safety net: the justification is user-facing, so no raw keys survive."""
+    return {section: _humanize(text) for section, text in justification.items()}
+
+
+def analyze_traits(
+    domain: str,
+    functional_requirements: list[dict],
+    non_functional_requirements: list[dict],
+    scenario: str | None = None,
+) -> dict:
     """
     Returns trait_details: {trait_key: {"score": int, "evidence": str, "reason": str}}
     for all 9 TRAIT_KEYS. Scores are clamped defensively to 1-5.
     """
     prompt = TRAIT_PROMPT_TEMPLATE.format(
         rubrics=TRAIT_RUBRICS,
+        scenario=scenario.strip() if scenario and scenario.strip() else "(not provided - rate from the domain and requirements only)",
         domain=domain,
         functional_list=_format_requirements(functional_requirements),
         non_functional_list=_format_requirements(non_functional_requirements),
     )
-    raw = generate_text(prompt, temperature=0.15)
+    # Temperature 0: trait scores feed a deterministic scorer, so the same
+    # requirements should produce the same scores as far as the model allows.
+    raw = generate_text(prompt, temperature=0)
     parsed = parse_json_response(raw)
 
     trait_details = {}
@@ -190,7 +233,12 @@ def analyze_traits(domain: str, functional_requirements: list[dict], non_functio
     return trait_details
 
 
-def recommend_sdlc(domain: str, functional_requirements: list[dict], non_functional_requirements: list[dict]) -> dict:
+def recommend_sdlc(
+    domain: str,
+    functional_requirements: list[dict],
+    non_functional_requirements: list[dict],
+    scenario: str | None = None,
+) -> dict:
     """
     Full Agent 2 pipeline. Returns dict with:
     traits (flat scores, for UI bars), trait_details (full evidence/reason,
@@ -198,25 +246,37 @@ def recommend_sdlc(domain: str, functional_requirements: list[dict], non_functio
     why_not explanation for non-top models), recommended_model,
     is_close_call, justification (4 sections)
     """
-    trait_details = analyze_traits(domain, functional_requirements, non_functional_requirements)
+    trait_details = analyze_traits(domain, functional_requirements, non_functional_requirements, scenario)
     flat_traits = {k: v["score"] for k, v in trait_details.items()}
 
     scored_models = score_models(flat_traits)
-    close_call = is_close_call(scored_models)
+    tied = top_two_tied(flat_traits)
+    close_call = tied or is_close_call(scored_models)
 
     for i, entry in enumerate(scored_models):
         entry["why_not"] = None if i == 0 else explain_mismatch(entry["model"], flat_traits)
+    if tied:
+        # Same response shape: the runner-up's why_not string carries the tie-break reason.
+        scored_models[1]["why_not"] = explain_tie_break(flat_traits) + " " + scored_models[1]["why_not"]
 
     top = scored_models[0]
     second = scored_models[1]
     key_reqs = (functional_requirements[:2] + non_functional_requirements[:2])
 
-    close_call_note = (
-        f"Note: this is a close comparison - {second['model']} scored {second['score']}/100, "
-        f"within {round(top['score'] - second['score'], 1)} points of the top pick. "
-        f"Acknowledge this is not an overwhelmingly decisive gap."
-        if close_call else ""
-    )
+    if tied:
+        close_call_note = (
+            f"Note: this is a TIE - {second['model']} has the same compatibility score "
+            f"({second['score']}/100). {explain_tie_break(flat_traits)} "
+            f"State plainly that the two models are tied and {top['model']} was chosen only by this tie-break rule."
+        )
+    elif close_call:
+        close_call_note = (
+            f"Note: this is a close comparison - {second['model']} scored {second['score']}/100, "
+            f"within {round(top['score'] - second['score'], 1)} points of the top pick. "
+            f"Acknowledge this is not an overwhelmingly decisive gap."
+        )
+    else:
+        close_call_note = ""
 
     justification_prompt = JUSTIFICATION_PROMPT_TEMPLATE.format(
         domain=domain,
@@ -227,7 +287,7 @@ def recommend_sdlc(domain: str, functional_requirements: list[dict], non_functio
         key_requirements=_format_requirements(key_reqs),
     )
     raw_justification = generate_text(justification_prompt, temperature=0.3)
-    justification = parse_json_response(raw_justification)
+    justification = _humanize_trait_keys(parse_json_response(raw_justification))
 
     return {
         "traits": flat_traits,

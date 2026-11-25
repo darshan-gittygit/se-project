@@ -638,3 +638,8 @@ textarea#scenario:focus { outline: none; border-color: var(--accent-blue); }
   border-top: 1px solid var(--glass-border);
 }
 .page-footer strong { color: var(--text-secondary); }
+
+/* Print: keep the report itself, drop the page footer. */
+@media print {
+  .page-footer { display: none !important; }
+}

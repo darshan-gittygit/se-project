@@ -32,6 +32,9 @@ class SdlcRequest(BaseModel):
     domain: str
     functional_requirements: list[RequirementItem]
     non_functional_requirements: list[RequirementItem]
+    # Optional original scenario text; /agents/sdlc passes it to trait rating
+    # (the compliance endpoint shares this model and ignores it).
+    scenario: str | None = None
 
 
 @app.get("/health")
@@ -93,6 +96,7 @@ def run_sdlc_agent(body: SdlcRequest):
             domain=body.domain,
             functional_requirements=[r.model_dump() for r in body.functional_requirements],
             non_functional_requirements=[r.model_dump() for r in body.non_functional_requirements],
+            scenario=body.scenario,
         )
         result["meta"] = {"model": GEMINI_MODEL}
         return result
@@ -130,6 +134,7 @@ def run_full_pipeline(body: ScenarioRequest):
             domain=requirements.get("domain_inferred", "Unknown"),
             functional_requirements=requirements.get("functional_requirements", []),
             non_functional_requirements=requirements.get("non_functional_requirements", []),
+            scenario=body.scenario,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Agent 2 failed: {e}")

@@ -70,5 +70,5 @@ def extract_requirements(scenario: str) -> dict:
     Raises ValueError if the model's output isn't valid JSON.
     """
     prompt = PROMPT_TEMPLATE.format(scenario=scenario.strip())
-    raw = generate_text(prompt, temperature=0.3)
+    raw = generate_text(prompt, temperature=0.1)  # low: steadier requirement lists run to run
     return parse_json_response(raw)

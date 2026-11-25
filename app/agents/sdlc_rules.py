@@ -90,34 +90,96 @@ MAX_TRAIT_DISTANCE = 4  # on a 1-5 scale, max possible difference per trait
 CLOSE_CALL_MARGIN = 5.0
 
 
+# Two UNROUNDED scores this close are a tie. With the current weights every
+# weighted distance is a multiple of 0.1, so distinct scores differ by at
+# least 100 * 0.1 / 38.8 = 0.26 points: in practice a tie means an identical
+# weighted distance, which also shows as identical 1-decimal scores in the UI
+# (tests/test_scoring.py checks this granularity assumption).
+TIE_TOLERANCE = 0.05
+
+
+def _rank(traits: dict) -> list[dict]:
+    """
+    Internal ranking with everything the tie-break needs. Never depends on
+    the order of SDLC_PROFILES:
+    1. Sort by unrounded score (desc), model name as a stable total order.
+    2. Models within TIE_TOLERANCE of the leading score of their group form a
+       tie group, ordered by: smaller worst single-trait gap, then smaller
+       total unweighted gap, then alphabetical name.
+    """
+    max_weighted_distance = sum(
+        TRAIT_WEIGHTS[t] * MAX_TRAIT_DISTANCE for t in TRAIT_WEIGHTS
+    )
+    records = []
+    for model_name, profile in SDLC_PROFILES.items():
+        gaps = {t: abs(traits[t] - profile[t]) for t in TRAIT_WEIGHTS}
+        weighted_distance = sum(TRAIT_WEIGHTS[t] * gaps[t] for t in TRAIT_WEIGHTS)
+        records.append({
+            "model": model_name,
+            "raw_score": (1 - weighted_distance / max_weighted_distance) * 100,
+            "worst_gap": max(gaps.values()),
+            "total_gap": sum(gaps.values()),
+            "profile": profile,
+        })
+
+    records.sort(key=lambda r: (-r["raw_score"], r["model"]))
+    ranked, i = [], 0
+    while i < len(records):
+        leader = records[i]["raw_score"]
+        j = i
+        while j < len(records) and leader - records[j]["raw_score"] <= TIE_TOLERANCE:
+            j += 1
+        group = records[i:j]
+        group.sort(key=lambda r: (r["worst_gap"], r["total_gap"], r["model"]))
+        ranked.extend(group)
+        i = j
+    return ranked
+
+
 def score_models(traits: dict) -> list[dict]:
     """
     traits: dict with all 9 keys in TRAIT_WEIGHTS, each an int 1-5.
     Returns a list of {"model": str, "score": float (0-100), "profile": dict},
-    sorted best-fit first. Score is a weighted similarity to each model's
-    ideal profile, normalized to 0-100 identically for every model - no
-    model has a structural numerical advantage; a model only wins because
-    its profile best matches the extracted characteristics.
+    sorted best-fit first (ties broken as described in _rank). Score is a
+    weighted similarity to each model's ideal profile, normalized to 0-100
+    identically for every model - no model has a structural numerical
+    advantage; a model only wins because its profile best matches the
+    extracted characteristics.
     """
-    results = []
-    max_weighted_distance = sum(
-        TRAIT_WEIGHTS[t] * MAX_TRAIT_DISTANCE for t in TRAIT_WEIGHTS
-    )
+    return [
+        {"model": r["model"], "score": round(r["raw_score"], 1), "profile": r["profile"]}
+        for r in _rank(traits)
+    ]
 
-    for model_name, profile in SDLC_PROFILES.items():
-        weighted_distance = sum(
-            TRAIT_WEIGHTS[t] * abs(traits[t] - profile[t]) for t in TRAIT_WEIGHTS
-        )
-        similarity = 1 - (weighted_distance / max_weighted_distance)
-        score = round(similarity * 100, 1)
-        results.append({"model": model_name, "score": score, "profile": profile})
 
-    results.sort(key=lambda r: r["score"], reverse=True)
-    return results
+def top_two_tied(traits: dict) -> bool:
+    """True if the top two models' unrounded scores are within TIE_TOLERANCE."""
+    ranked = _rank(traits)
+    return len(ranked) > 1 and abs(ranked[0]["raw_score"] - ranked[1]["raw_score"]) <= TIE_TOLERANCE
+
+
+def explain_tie_break(traits: dict) -> str | None:
+    """Deterministic sentence on why the top model won a tie, or None if no tie."""
+    if not top_two_tied(traits):
+        return None
+    winner, runner = _rank(traits)[:2]
+    w, r = winner["model"], runner["model"]
+    score = round(winner["raw_score"], 1)
+    if winner["worst_gap"] != runner["worst_gap"]:
+        rule = (f"{w}'s worst single-trait gap is {winner['worst_gap']} point(s), "
+                f"smaller than {r}'s {runner['worst_gap']}")
+    elif winner["total_gap"] != runner["total_gap"]:
+        rule = (f"both have a worst single-trait gap of {winner['worst_gap']}, but {w}'s total "
+                f"gap across all traits is {winner['total_gap']}, smaller than {r}'s {runner['total_gap']}")
+    else:
+        rule = (f"both have a worst single-trait gap of {winner['worst_gap']} and a total gap of "
+                f"{winner['total_gap']}, so the final rule (alphabetical order) applies")
+    return (f"{r} tied with {w} on compatibility score ({score}/100). The tie was broken "
+            f"deterministically: {rule}.")
 
 
 def is_close_call(scored_models: list[dict]) -> bool:
-    """True if the top two models are within CLOSE_CALL_MARGIN points."""
+    """True if the top two models are within CLOSE_CALL_MARGIN points (a tie included)."""
     if len(scored_models) < 2:
         return False
     return (scored_models[0]["score"] - scored_models[1]["score"]) < CLOSE_CALL_MARGIN

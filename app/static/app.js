@@ -4,6 +4,7 @@
 */
 
 let currentRequirements = null;
+let currentScenario = '';  // scenario text the current requirements were generated from
 
 function setStatus(mode, text) {
   const dot = document.getElementById('statusDot');
@@ -71,6 +72,7 @@ async function generateRequirements() {
     }
 
     currentRequirements = data;
+    currentScenario = scenario;
     setStatus('ready', 'System Ready');
     setFlowStage(2);
     renderRequirementsPanel(data);
@@ -234,7 +236,8 @@ async function runSdlcAnalysis() {
       body: JSON.stringify({
         domain: currentRequirements.domain_inferred,
         functional_requirements: currentRequirements.functional_requirements,
-        non_functional_requirements: currentRequirements.non_functional_requirements
+        non_functional_requirements: currentRequirements.non_functional_requirements,
+        scenario: currentScenario
       })
     });
     const data = await res.json();
@@ -271,6 +274,9 @@ function renderSdlcPanel(data) {
   const models = data.scored_models;
   const top = models[0];
   const maxScore = Math.max(...models.map(m => m.score));
+  // Backend ties are equal unrounded scores; with the current weights those always
+  // show as equal 1-decimal scores (checked in tests/test_scoring.py).
+  const isTie = data.is_close_call && models.length > 1 && models[0].score === models[1].score;
 
   const traitRow = (label, value) => `
     <div class="trait-row">
@@ -338,7 +344,9 @@ function renderSdlcPanel(data) {
       ${traitRow('Incremental Delivery Fit', t.incremental_suitability)}
       ${traitRow('Prototyping Need', t.prototyping_need)}
     </div>
-    ${data.is_close_call ? `<div class="compare-caption" style="margin-bottom:18px;">This is a close comparison with the runner-up model (${escapeHtml(models[1].model)}, ${models[1].score}/100) - not an overwhelmingly decisive gap.</div>` : ''}
+    ${data.is_close_call ? `<div class="compare-caption" style="margin-bottom:18px;">${isTie
+      ? `Tie: ${escapeHtml(top.model)} and ${escapeHtml(models[1].model)} have the same compatibility score (${top.score}/100). ${escapeHtml(top.model)} is recommended only by the deterministic tie-break (smaller worst single-trait gap, then smaller total gap, then alphabetical order) - treat this as a close call. See "Why not ${escapeHtml(models[1].model)}?" for details.`
+      : `This is a close comparison with the runner-up model (${escapeHtml(models[1].model)}, ${models[1].score}/100) - not an overwhelmingly decisive gap.`}</div>` : ''}
 
     <button class="reasoning-toggle" onclick="toggleSection('reasoningBody')">
       <span>Why this recommendation?</span>
@@ -391,6 +399,7 @@ function toggleSection(id) {
 
 function resetApp() {
   currentRequirements = null;
+  currentScenario = '';
   document.getElementById('scenario').value = '';
   document.getElementById('results').innerHTML = '';
   document.getElementById('hero').classList.remove('compact');
