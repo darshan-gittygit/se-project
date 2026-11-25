@@ -39,7 +39,7 @@ def run(monkeypatch, considerations, per_req=None, risk="High"):
     per_req = per_req or {
         FR[0]["requirement"]: [chunk("kyc_aml-4", 0.43, KYC_TEXT)],
         FR[1]["requirement"]: [chunk("fair_lending-3", 0.52, FAIR_TEXT)],
-        NFR[0]["requirement"]: [chunk("data_protection-1", 0.58, DP_TEXT)],
+        NFR[0]["requirement"]: [chunk("data_protection-1", 0.61, DP_TEXT)],
     }
     calls = []
 
@@ -81,12 +81,13 @@ def test_confidence_is_graded_from_distance_and_evidence(monkeypatch):
     d, _ = run(monkeypatch, GOOD)
     assert [entry(d, r)["mappings"][0]["confidence"] for r in ("FR-1", "FR-2", "NFR-1")] == ["High", "Medium", "Low"]
     assert entry(d, "FR-1")["needs_human_review"] is False
-    assert entry(d, "NFR-1")["review_reasons"] == ["data_protection: low-confidence match (distance 0.58)"]
+    assert entry(d, "NFR-1")["review_reasons"] == ["data_protection: low-confidence match (distance 0.61)"]
     assert d["compliance_mapping"]["review_count"] == 1
 
 
 @pytest.mark.parametrize("distance, verified, expected", [
-    (0.43, True, "High"), (0.50, True, "Medium"), (0.549, True, "Medium"), (0.55, True, "Low"),
+    (0.43, True, "High"), (0.50, True, "Medium"), (0.55, True, "Medium"), (0.584, True, "Medium"),
+    (0.599, True, "Medium"), (0.60, True, "Low"), (0.619, True, "Low"),
     (0.43, False, "Low"), (None, True, "Low"),
 ])
 def test_grade_confidence_bands(distance, verified, expected):

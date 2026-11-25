@@ -17,12 +17,16 @@ from app.rag.kb_metadata import load_metadata, source_info
 from app.schemas import _normalise
 
 # Confidence bands from the labelled tuning set (docs/RAG_TUNING.md):
-# relevant pairs have a median distance of 0.52 and no irrelevant pair was
-# closer than 0.551. Below 0.50 is well inside the relevant range (High);
-# 0.50-0.55 is still closer than every irrelevant pair seen (Medium); from
-# 0.55 to the threshold relevant and irrelevant pairs overlap (Low).
+# relevant pairs have a median distance of 0.52. Below 0.50 is well inside
+# the relevant range (High). Between 0.55 and 0.62 the tuning set has 9
+# pairs: the 7 that can be cited (source applies to the domain) are all
+# correct, and the 2 wrong ones are cross-domain matches that applicability
+# already excludes. So 0.50-0.60 is Medium; 0.60 up to the 0.62 threshold
+# stays Low as a margin (its 3 tuning pairs were correct too, but it is the
+# edge of the retrieval range). Small single-labeller set: re-check these
+# bands when the KB or the labels grow.
 HIGH_CONFIDENCE_DISTANCE = 0.50
-MEDIUM_CONFIDENCE_DISTANCE = 0.55
+MEDIUM_CONFIDENCE_DISTANCE = 0.60
 MIN_EVIDENCE_WORDS = 5
 
 NOTICE = ("Not a legal determination. Mappings are to a small curated knowledge base of paraphrased "
