@@ -201,3 +201,23 @@ def analyze_compliance(domain: str, functional_requirements: list[dict], non_fun
     ]
     result["dropped_considerations"] = dropped
     return result
+
+
+def attach_regulations(requirements: dict, compliance_result: dict) -> dict:
+    """
+    Fills each requirement record's applicable_regulations (problem statement
+    section 8) with the DOMAIN-SPECIFIC knowledge-base sources that the kept
+    compliance considerations cite for its id. The generic baseline is not a
+    regulation, so it is left out. Agent 1 never sets this field itself.
+    Mutates and returns `requirements`.
+    """
+    by_id: dict[str, set[str]] = {}
+    for c in compliance_result.get("considerations", []):
+        if c.get("source") in GENERIC_SOURCES:
+            continue
+        for rid in c.get("related_requirement_ids", []):
+            by_id.setdefault(rid, set()).add(c["source"])
+    for key in ("functional_requirements", "non_functional_requirements"):
+        for r in requirements.get(key, []):
+            r["applicable_regulations"] = sorted(by_id.get(r["id"], set()))
+    return requirements

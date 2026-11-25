@@ -4,11 +4,12 @@ the model, validates the reply and retries once with the validation errors
 before giving up.
 
 Checks that need request-specific facts (which requirement IDs exist, which
-knowledge-base sources exist) read them from the validation context:
-    context={"requirement_ids": {...}, "kb_sources": {...}}
+knowledge-base sources exist, which texts a requirement may quote) read them
+from the validation context:
+    context={"requirement_ids": {...}, "kb_sources": {...},
+             "source_texts": [{"text": str, "role": str | None}, ...]}
 
-The response shapes these produce are exactly the keys the API already
-returned; validation only rejects bad values, it never adds or renames keys.
+Existing response keys are never renamed or removed; new keys are additive.
 """
 import re
 from typing import Callable, Literal
@@ -16,6 +17,9 @@ from typing import Callable, Literal
 from pydantic import BaseModel, Field, StrictInt, ValidationError, ValidationInfo, field_validator, model_validator
 
 from app.json_utils import parse_json_response
+from app.vocabulary import (
+    APPROVAL_STATUSES, LEVELS, REQUIREMENT_CATEGORIES, STAKEHOLDER_ROLES, canonical,
+)
 
 _REQ_ID_IN_TEXT = re.compile(r"\b(?:FR|NFR)-\d+\b")
 
@@ -32,16 +36,78 @@ class _NonEmptyText(BaseModel):
 
 
 # --- Agent 1: requirements -------------------------------------------------
+#
+# The requirement record follows docs/PROBLEM_STATEMENT.md section 8 (ID,
+# statement, category, source stakeholder, business justification, priority,
+# dependencies, assumptions, acceptance criteria, applicable regulations,
+# risk level, confidence score, approval status), with section 9's
+# categories (multi-label) and section 12's link to the original stakeholder
+# statement (source_text). Fields marked "set by code" ignore whatever the
+# LLM sends: the LLM cannot approve its own output, cite regulations (those
+# come from the compliance agent's retrieval) or grade its own confidence.
+
+def _normalise(text: str) -> str:
+    return " ".join(re.sub(r"[^a-z0-9%]+", " ", text.lower()).split())
+
+
+MIN_SOURCE_WORDS = 2
+
 
 class Requirement(_NonEmptyText):
     id: str
     requirement: str = Field(min_length=1)
-    priority: Literal["High", "Medium", "Low"]
+    priority: Literal[LEVELS]
+    type: Literal["FR", "NFR"] | None = None                      # set by code from the list it is in
+    categories: list[Literal[REQUIREMENT_CATEGORIES]] = Field(min_length=1)
+    source_stakeholder: Literal[STAKEHOLDER_ROLES]
+    source_text: str = ""                                          # exact quote it derives from, or "" if assumed
+    business_justification: str = Field(min_length=1)
+    dependencies: list[str] = Field(default_factory=list)          # other requirement ids
+    assumptions: list[str] = Field(default_factory=list)
+    acceptance_criteria: list[str] = Field(min_length=1)
+    applicable_regulations: list[str] = Field(default_factory=list)  # set by code (compliance agent)
+    risk_level: Literal[LEVELS]
+    confidence: Literal[LEVELS] | None = None                      # set by code, see _confidence
+    approval_status: Literal[APPROVAL_STATUSES] = "proposed"       # set by code
 
-    @field_validator("priority", mode="before")
+    @field_validator("priority", "risk_level", mode="before")
     @classmethod
     def _normalise_case(cls, v):
         return v.strip().capitalize() if isinstance(v, str) else v
+
+    @field_validator("categories", mode="before")
+    @classmethod
+    def _canonical_categories(cls, v):
+        return [canonical(x, REQUIREMENT_CATEGORIES) for x in v] if isinstance(v, list) else v
+
+    @field_validator("source_stakeholder", mode="before")
+    @classmethod
+    def _canonical_role(cls, v):
+        return canonical(v, STAKEHOLDER_ROLES)
+
+    @field_validator("categories")
+    @classmethod
+    def _unique_categories(cls, v):
+        return list(dict.fromkeys(v))
+
+    @field_validator("acceptance_criteria", "assumptions")
+    @classmethod
+    def _no_blank_items(cls, v):
+        if any(not str(x).strip() for x in v):
+            raise ValueError("items must not be blank")
+        return [str(x).strip() for x in v]
+
+
+def _confidence(req: Requirement) -> str:
+    """
+    Deterministic, not model-reported (no invented confidence figures):
+    High   - quotes the scenario/answers and needs no assumptions
+    Medium - quotes the scenario/answers but also relies on assumptions
+    Low    - no quote; derived from assumptions only
+    """
+    if not req.source_text:
+        return "Low"
+    return "Medium" if req.assumptions else "High"
 
 
 class RequirementsOutput(_NonEmptyText):
@@ -51,15 +117,40 @@ class RequirementsOutput(_NonEmptyText):
     non_functional_requirements: list[Requirement] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def _ids_are_well_formed_and_unique(self):
+    def _check_and_complete_records(self, info: ValidationInfo):
         for prefix, reqs in (("FR", self.functional_requirements), ("NFR", self.non_functional_requirements)):
             for r in reqs:
                 if not re.fullmatch(rf"{prefix}-\d+", r.id):
                     raise ValueError(f"requirement id {r.id!r} must look like {prefix}-<number>")
-        ids = [r.id for r in self.functional_requirements + self.non_functional_requirements]
+        all_reqs = self.functional_requirements + self.non_functional_requirements
+        ids = [r.id for r in all_reqs]
         dupes = sorted({i for i in ids if ids.count(i) > 1})
         if dupes:
             raise ValueError(f"duplicate requirement ids: {dupes}")
+
+        sources = _ctx(info, "source_texts")
+        for prefix, reqs in (("FR", self.functional_requirements), ("NFR", self.non_functional_requirements)):
+            for r in reqs:
+                bad_deps = [d for d in r.dependencies if d not in ids or d == r.id]
+                if bad_deps:
+                    raise ValueError(f"{r.id}: dependencies must be other requirement ids from this list, got {bad_deps}")
+                if r.source_text:
+                    if len(r.source_text.split()) < MIN_SOURCE_WORDS:
+                        raise ValueError(f"{r.id}: source_text must quote at least {MIN_SOURCE_WORDS} words")
+                    if sources is not None:
+                        quote = _normalise(r.source_text)
+                        origin = next((s for s in sources if quote in _normalise(s["text"])), None)
+                        if origin is None:
+                            raise ValueError(f"{r.id}: source_text is not an exact quote from the scenario "
+                                             f"or interview answers: {r.source_text!r}")
+                        if origin.get("role"):
+                            r.source_stakeholder = origin["role"]  # the person who actually said it
+                elif not r.assumptions:
+                    raise ValueError(f"{r.id}: give a source_text quote or list the assumptions it relies on")
+                r.type = prefix
+                r.confidence = _confidence(r)
+                r.approval_status = "proposed"
+                r.applicable_regulations = []
         return self
 
 

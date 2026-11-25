@@ -9,12 +9,16 @@ Built by Darshan - NIT Karnataka, Surathkal (CS305 Software Engineering course p
 ## How it works
 
 ```
-Scenario -> Agent 1: Requirements -> Agent 3: Compliance & Risk (RAG) -> Agent 2: SDLC recommendation
+(optional) Interview -> Scenario + answers -> Agent 1: Requirement records -> Agent 3: Compliance & Risk (RAG)
+                                                                   -> Quality check -> Agent 2: SDLC recommendation
 ```
 
-1. **Agent 1 (requirements):** functional and non-functional requirements with IDs and priorities.
+0. **Interview (optional, API only):** role-specific question templates for the 9 stakeholder roles in the problem statement, and an endpoint that returns the next follow-up questions from the answers collected so far.
+1. **Agent 1 (requirements):** functional and non-functional requirement records with the problem statement's fields: categories, source stakeholder, the exact source text, business justification, priority, dependencies, assumptions, acceptance criteria, risk level, confidence (computed) and approval status (`proposed`).
 2. **Agent 3 (compliance and risk):** runs one retrieval query per requirement against the knowledge base in `knowledge_base/` (ChromaDB + Gemini embeddings) and passes only chunks under a tuned distance threshold to the LLM. Whether the knowledge base covers the domain (`kb_relevance`) is computed from those distances using domain-specific sources only; the domain-agnostic security baseline can still be cited, labelled "generic baseline", but never counts as coverage. Any citation of a source that was not retrieved is dropped, so the panel can only cite what was actually retrieved.
 3. **Agent 2 (SDLC):** the LLM rates 9 project traits against fixed rubrics and must cite evidence; a deterministic engine scores Waterfall, V-Model, Incremental, Agile and Spiral; the LLM then explains the result. The LLM never picks the model.
+
+**Quality check (API and pipeline):** flags ambiguity, untestable wording and near-duplicates by deterministic rules, and conflicts between requirements with one LLM call; each flag has requirement IDs, a reason and a suggested fix.
 
 Every LLM reply is checked against a schema (`app/schemas.py`): allowed values, known requirement IDs, real knowledge-base sources, all nine traits as integers 1-5. An invalid reply is retried once with the errors, then the API returns a 502 rather than guessing.
 
@@ -72,8 +76,11 @@ app/
   gemini_client.py           Gemini calls: backoff on 429, retry on 503, fallback across models
   json_utils.py              tolerant JSON parsing of LLM output
   schemas.py                 Pydantic schemas for every LLM reply + validate/retry helper
+  vocabulary.py              roles, topics, categories and statuses quoted from the problem statement
   agents/
     requirement_agent.py     Agent 1
+    interview_agent.py       interview follow-up questions (+ interview_templates.py)
+    quality_agent.py         quality and conflict checks
     compliance_agent.py      Agent 3 (RAG)
     sdlc_agent.py            Agent 2 (trait extraction + justification)
     sdlc_rules.py            deterministic SDLC scoring engine
@@ -87,6 +94,7 @@ docs/ARCHITECTURE.md         design notes, diagrams, scoring tables
 docs/RAG_TUNING.md           relevance threshold tuning results
 docs/SCORING_ANALYSIS.md     win share and sensitivity of the SDLC scoring
 docs/EVALUATION_BASELINE.md  evaluation of the project before the critical fixes
+docs/COVERAGE.md             problem-statement coverage plan: deliverable, phase and status per section
 ```
 
 ## Troubleshooting

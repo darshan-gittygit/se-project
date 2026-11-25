@@ -12,17 +12,19 @@ from fastapi.testclient import TestClient
 import app.agents.requirement_agent as req_mod
 import app.agents.compliance_agent as comp_mod
 import app.agents.sdlc_agent as sdlc_mod
+import app.agents.quality_agent as quality_mod
 from app.main import app
+from tests.helpers import record
 
 REQS = {
     "domain_inferred": "Payroll Processing System",
     "assumptions": ["Assumed monthly payroll cycle"],
     "functional_requirements": [
-        {"id": "FR-1", "requirement": "The system shall calculate salaries.", "priority": "High"},
-        {"id": "FR-2", "requirement": "The system shall generate payslips.", "priority": "High"},
+        record("FR-1", "The system shall calculate salaries."),
+        record("FR-2", "The system shall generate payslips."),
     ],
     "non_functional_requirements": [
-        {"id": "NFR-1", "requirement": "The system shall keep an audit trail.", "priority": "High"},
+        record("NFR-1", "The system shall keep an audit trail."),
     ],
 }
 
@@ -59,12 +61,14 @@ def fake_llm(prompt, temperature=0.3):
         return json.dumps(JUSTIFICATION)
     if "compliance and risk analyst" in prompt:
         return json.dumps(COMPLIANCE)
+    if "requirements list for CONFLICTS" in prompt:
+        return json.dumps({"conflicts": []})
     raise AssertionError("unexpected prompt: " + prompt[:80])
 
 
 @pytest.fixture(autouse=True)
 def mock_llm(monkeypatch):
-    for mod in (req_mod, comp_mod, sdlc_mod):
+    for mod in (req_mod, comp_mod, sdlc_mod, quality_mod):
         monkeypatch.setattr(mod, "generate_text", fake_llm)
     monkeypatch.setattr(comp_mod, "retrieve_many", lambda queries, top_k=3: [[
         {"id": "kyc_aml-0", "text": "KYC text", "source": "kyc_aml", "distance": 0.3},

@@ -12,13 +12,15 @@ from app.schemas import (
     ComplianceOutput, Justification, LLMOutputError, RequirementsOutput, generate_validated,
 )
 
+from tests.helpers import record
+
 client = TestClient(app)
 
 GOOD_REQS = {
     "domain_inferred": "Payroll",
     "assumptions": [],
-    "functional_requirements": [{"id": "FR-1", "requirement": "Calculate salaries.", "priority": "High"}],
-    "non_functional_requirements": [{"id": "NFR-1", "requirement": "Keep an audit trail.", "priority": "Low"}],
+    "functional_requirements": [record("FR-1", "Calculate salaries.")],
+    "non_functional_requirements": [record("NFR-1", "Keep an audit trail.", priority="Low")],
 }
 BODY = {"domain": "Payroll",
         "functional_requirements": GOOD_REQS["functional_requirements"],
@@ -80,11 +82,10 @@ def _req_variant(**changes):
     _req_variant(functional_requirements=[]),
     _req_variant(non_functional_requirements=None),
     _req_variant(domain_inferred="  "),
-    _req_variant(functional_requirements=[{"id": "NFR-9", "requirement": "x", "priority": "High"}]),
-    _req_variant(functional_requirements=[{"id": "FR-1", "requirement": "x", "priority": "High"},
-                                          {"id": "FR-1", "requirement": "y", "priority": "Low"}]),
-    _req_variant(functional_requirements=[{"id": "FR-1", "requirement": "", "priority": "High"}]),
-    _req_variant(functional_requirements=[{"id": "FR-1", "requirement": "x", "priority": "Urgent"}]),
+    _req_variant(functional_requirements=[record("NFR-9", "x")]),
+    _req_variant(functional_requirements=[record("FR-1", "x"), record("FR-1", "y", priority="Low")]),
+    _req_variant(functional_requirements=[record("FR-1", "")]),
+    _req_variant(functional_requirements=[record("FR-1", "x", priority="Urgent")]),
 ])
 def test_requirement_schema_rejects(bad):
     with pytest.raises(ValueError):
@@ -92,10 +93,11 @@ def test_requirement_schema_rejects(bad):
 
 
 def test_priority_case_is_normalised_and_extra_keys_are_dropped():
-    data = _req_variant(extra="ignored", functional_requirements=[
-        {"id": "FR-1", "requirement": "x", "priority": "high", "rationale": "dropped"}])
+    data = _req_variant(extra="ignored", functional_requirements=[record("FR-1", "x", priority="high", rationale="dropped")])
     out = RequirementsOutput.model_validate(data).model_dump()
-    assert out["functional_requirements"][0] == {"id": "FR-1", "requirement": "x", "priority": "High"}
+    fr = out["functional_requirements"][0]
+    assert {k: fr[k] for k in ("id", "requirement", "priority")} == {"id": "FR-1", "requirement": "x", "priority": "High"}
+    assert "rationale" not in fr
     assert set(out) == {"domain_inferred", "assumptions", "functional_requirements", "non_functional_requirements"}
 
 

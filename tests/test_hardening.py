@@ -9,13 +9,14 @@ from google.genai import errors as genai_errors
 
 import app.gemini_client as gc
 from app.main import MAX_SCENARIO_CHARS, MAX_REQUIREMENTS_PER_LIST, app
+from tests.helpers import record
 
 client = TestClient(app)
 PRIMARY, FALLBACK = gc._candidate_models()[0], gc._candidate_models()[1]
 
 REQS = {"domain_inferred": "Payroll", "assumptions": [],
-        "functional_requirements": [{"id": "FR-1", "requirement": "Calculate salaries.", "priority": "High"}],
-        "non_functional_requirements": [{"id": "NFR-1", "requirement": "Audit trail.", "priority": "High"}]}
+        "functional_requirements": [record("FR-1", "Calculate salaries.")],
+        "non_functional_requirements": [record("NFR-1", "Audit trail.")]}
 TRAITS = {k: {"score": 3, "evidence": "e", "reason": "r"} for k in (
     "clarity", "volatility", "complexity", "criticality", "risk_uncertainty",
     "verification_validation", "stakeholder_feedback", "incremental_suitability", "prototyping_need")}
@@ -89,8 +90,8 @@ def test_pipeline_has_meta_for_all_calls(fake_sdk, monkeypatch):
         json.dumps({"risk_level": "Low", "considerations": [], "summary": "s"})
         if "compliance and risk analyst" in prompt else reply_for(prompt))
     d = client.post("/agents/pipeline", json={"scenario": "A payroll system for a company"}).json()
-    assert d["meta"]["models_used"] == [PRIMARY] * 4
-    assert {"scenario", "requirements", "compliance", "sdlc_recommendation"} <= set(d)
+    assert d["meta"]["models_used"] == [PRIMARY] * 5  # requirements, compliance, conflicts, traits, justification
+    assert {"scenario", "requirements", "compliance", "quality", "sdlc_recommendation"} <= set(d)
 
 
 def test_tracking_does_not_leak_between_requests(fake_sdk):
