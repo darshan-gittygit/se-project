@@ -1,0 +1,59 @@
+{
+  "_note": "Metadata for each knowledge-base document (problem statement section 5: source, jurisdiction, effective date, version, applicability). The documents are paraphrased principles written for this project, not verbatim law: 'version' and 'effective_date' describe this KB entry (git history), not the underlying regulation. 'applies_to' lists the domain tags from app/rag/kb_metadata.py DOMAIN_TAGS, or 'any'. 'generic_baseline' marks domain-agnostic documents that may be cited but never count as domain coverage. ingest.py only reads *.txt, so this file is not embedded.",
+  "sources": {
+    "data_protection": {
+      "title": "Data Protection and Privacy Principles",
+      "source": "Curated paraphrase of principles common to India's Digital Personal Data Protection Act and comparable data-protection frameworks",
+      "jurisdiction": "India; principles common to comparable frameworks elsewhere",
+      "version": "1",
+      "effective_date": "2026-11-25",
+      "applies_to": ["any"],
+      "generic_baseline": false
+    },
+    "fair_lending": {
+      "title": "Fair Lending and Responsible Credit Assessment Principles",
+      "source": "Curated paraphrase of fair-practice and responsible-lending principles, including India's fair practices guidance for banks and NBFCs",
+      "jurisdiction": "India; principles common to most jurisdictions",
+      "version": "1",
+      "effective_date": "2026-11-25",
+      "applies_to": ["Loan origination and credit assessment"],
+      "generic_baseline": false
+    },
+    "general_security_baseline": {
+      "title": "General Security and Privacy Baseline (Domain-Agnostic)",
+      "source": "Curated summary of widely used security practice, independent of any specific regulatory framework",
+      "jurisdiction": "Not jurisdiction-specific",
+      "version": "1",
+      "effective_date": "2026-11-25",
+      "applies_to": ["any"],
+      "generic_baseline": true
+    },
+    "healthcare_privacy": {
+      "title": "Healthcare Data Privacy Principles",
+      "source": "Curated paraphrase of health-data privacy principles such as HIPAA (US) and health-data provisions of broader data-protection laws",
+      "jurisdiction": "United States (HIPAA); equivalent provisions elsewhere",
+      "version": "1",
+      "effective_date": "2026-11-25",
+      "applies_to": ["Healthcare"],
+      "generic_baseline": false
+    },
+    "kyc_aml": {
+      "title": "Know Your Customer (KYC) and Anti-Money Laundering (AML) Principles",
+      "source": "Curated paraphrase of KYC and AML principles for institutions offering account opening, lending or payment services, including India's regulatory environment for banks and NBFCs",
+      "jurisdiction": "India; principles common to most jurisdictions",
+      "version": "1",
+      "effective_date": "2026-11-25",
+      "applies_to": ["Digital banking and mobile banking", "Loan origination and credit assessment", "Payment processing", "Customer onboarding and KYC", "Fraud detection"],
+      "generic_baseline": false
+    },
+    "payment_security": {
+      "title": "Payment and Cardholder Data Security Principles",
+      "source": "Curated paraphrase of industry payment-card security practice",
+      "jurisdiction": "Not jurisdiction-specific (industry practice)",
+      "version": "1",
+      "effective_date": "2026-11-25",
+      "applies_to": ["Payment processing", "Digital banking and mobile banking", "Card or online payments"],
+      "generic_baseline": false
+    }
+  }
+}

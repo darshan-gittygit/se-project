@@ -13,8 +13,9 @@ import app.agents.requirement_agent as req_mod
 import app.agents.compliance_agent as comp_mod
 import app.agents.sdlc_agent as sdlc_mod
 import app.agents.quality_agent as quality_mod
+import app.agents.risk_agent as risk_mod
 from app.main import app
-from tests.helpers import record
+from tests.helpers import RISK_PROMPT_MARKER, record, risk_reply
 
 REQS = {
     "domain_inferred": "Payroll Processing System",
@@ -37,7 +38,7 @@ TRAITS = {
 COMPLIANCE = {
     "risk_level": "High",
     "kb_relevance": "relevant",
-    "considerations": [{"related_requirement_ids": ["FR-1"], "note": "Needs audit trail.", "source": "kyc_aml"}],
+    "considerations": [{"related_requirement_ids": ["FR-1"], "note": "Protect salary data.", "source": "data_protection"}],
     "summary": "High regulatory risk.",
 }
 
@@ -63,15 +64,17 @@ def fake_llm(prompt, temperature=0.3):
         return json.dumps(COMPLIANCE)
     if "requirements list for CONFLICTS" in prompt:
         return json.dumps({"conflicts": []})
+    if RISK_PROMPT_MARKER in prompt:
+        return risk_reply()
     raise AssertionError("unexpected prompt: " + prompt[:80])
 
 
 @pytest.fixture(autouse=True)
 def mock_llm(monkeypatch):
-    for mod in (req_mod, comp_mod, sdlc_mod, quality_mod):
+    for mod in (req_mod, comp_mod, sdlc_mod, quality_mod, risk_mod):
         monkeypatch.setattr(mod, "generate_text", fake_llm)
     monkeypatch.setattr(comp_mod, "retrieve_many", lambda queries, top_k=3: [[
-        {"id": "kyc_aml-0", "text": "KYC text", "source": "kyc_aml", "distance": 0.3},
+        {"id": "data_protection-0", "text": "DP text", "source": "data_protection", "distance": 0.3},
         {"id": "healthcare_privacy-1", "text": "Health text", "source": "healthcare_privacy", "distance": 1.4},
     ] for _ in queries])
 
@@ -111,8 +114,8 @@ def test_requirements_rejects_short_scenario():
 def test_compliance_endpoint_only_counts_relevant_sources():
     d = client.post("/agents/compliance", json=BODY).json()
     assert d["risk_level"] == "High"
-    assert d["sources_used"] == ["kyc_aml"]  # weak healthcare match filtered out
-    assert set(d["sources_consulted"]) == {"kyc_aml", "healthcare_privacy"}
+    assert d["sources_used"] == ["data_protection"]  # weak healthcare match filtered out
+    assert set(d["sources_consulted"]) == {"data_protection", "healthcare_privacy"}
 
 
 def test_sdlc_endpoint_payroll_gets_v_model_not_high_volatility():

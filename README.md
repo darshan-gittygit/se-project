@@ -18,6 +18,8 @@ Built by Darshan - NIT Karnataka, Surathkal (CS305 Software Engineering course p
 2. **Agent 3 (compliance and risk):** runs one retrieval query per requirement against the knowledge base in `knowledge_base/` (ChromaDB + Gemini embeddings) and passes only chunks under a tuned distance threshold to the LLM. Whether the knowledge base covers the domain (`kb_relevance`) is computed from those distances using domain-specific sources only; the domain-agnostic security baseline can still be cited, labelled "generic baseline", but never counts as coverage. Any citation of a source that was not retrieved is dropped, so the panel can only cite what was actually retrieved.
 3. **Agent 2 (SDLC):** the LLM rates 9 project traits against fixed rubrics and must cite evidence; a deterministic engine scores Waterfall, V-Model, Incremental, Agile and Spiral; the LLM then explains the result. The LLM never picks the model.
 
+**Compliance mapping and risk register (pipeline):** each requirement is mapped to the knowledge-base sources that apply to the scenario's domain, with jurisdiction, version, required control, verified evidence, satisfied/gap, graded confidence and a human-review flag; a threat and risk register scores likelihood x impact in code.
+
 **Quality check (API and pipeline):** flags ambiguity, untestable wording and near-duplicates by deterministic rules, and conflicts between requirements with one LLM call; each flag has requirement IDs, a reason and a suggested fix.
 
 Every LLM reply is checked against a schema (`app/schemas.py`): allowed values, known requirement IDs, real knowledge-base sources, all nine traits as integers 1-5. An invalid reply is retried once with the errors, then the API returns a 502 rather than guessing.
@@ -81,12 +83,14 @@ app/
     requirement_agent.py     Agent 1
     interview_agent.py       interview follow-up questions (+ interview_templates.py)
     quality_agent.py         quality and conflict checks
+    compliance_mapping.py    per-requirement compliance mapping, confidence, review flags
+    risk_agent.py            threat and risk register
     compliance_agent.py      Agent 3 (RAG)
     sdlc_agent.py            Agent 2 (trait extraction + justification)
     sdlc_rules.py            deterministic SDLC scoring engine
   rag/                       embeddings, ingest, retriever
   static/                    index.html, style.css, app.js (the dashboard)
-knowledge_base/              curated compliance source documents (*.txt)
+knowledge_base/              curated compliance source documents (*.txt) + sources.json metadata
 chroma_db/                   generated vector store (rebuild with the ingest command)
 tests/                       offline test suite
 scripts/                     threshold tuning (live), win-share and sensitivity analysis (offline)

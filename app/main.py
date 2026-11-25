@@ -23,6 +23,7 @@ from app.config import STATIC_DIR
 from app.agents.requirement_agent import extract_requirements
 from app.agents.compliance_agent import analyze_compliance, attach_regulations
 from app.agents.quality_agent import analyze_quality
+from app.agents.risk_agent import build_risk_register
 from app.agents.sdlc_agent import recommend_sdlc
 
 app = FastAPI(title="Requora AI - Requirements Engineering & SDLC Recommendation API")
@@ -62,6 +63,7 @@ class RequirementItem(BaseModel):
     priority: str | None = None
     # Optional (additive): used by the quality check's untestable rule.
     acceptance_criteria: list[str] = []
+    categories: list[str] = []
 
 
 class SdlcRequest(BaseModel):
@@ -195,6 +197,7 @@ def run_compliance_agent(body: SdlcRequest):
                 domain=body.domain,
                 functional_requirements=[r.model_dump() for r in body.functional_requirements],
                 non_functional_requirements=[r.model_dump() for r in body.non_functional_requirements],
+                scenario=body.scenario,
             )
         result["meta"] = _meta(used)
         return result
@@ -233,9 +236,10 @@ def run_full_pipeline(body: ScenarioRequest):
     /agents/compliance, and /agents/sdlc separately for a real
     multi-stage workflow.
 
-    Order: requirements -> compliance (then each requirement's
-    applicable_regulations is filled from the domain-specific sources cited
-    for it) -> quality checks -> SDLC recommendation.
+    Order: requirements -> compliance + per-requirement compliance mapping
+    (then each requirement's applicable_regulations is filled from the
+    domain-specific sources cited for it) -> quality checks -> risk register
+    -> SDLC recommendation. 6 LLM calls.
     """
     _check_scenario(body.scenario)
     answers = _check_answers(body.answers)
@@ -251,11 +255,13 @@ def run_full_pipeline(body: ScenarioRequest):
                 domain=requirements.get("domain_inferred", "Unknown"),
                 functional_requirements=requirements.get("functional_requirements", []),
                 non_functional_requirements=requirements.get("non_functional_requirements", []),
+                scenario=body.scenario,
             )
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"Agent 3 (Compliance) failed: {e}")
 
         attach_regulations(requirements, compliance_result)
+        compliance_mapping = compliance_result.pop("compliance_mapping")
 
         try:
             quality_result = analyze_quality(
@@ -265,6 +271,15 @@ def run_full_pipeline(body: ScenarioRequest):
             )
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"Quality check failed: {e}")
+
+        try:
+            risk_register = build_risk_register(
+                domain=requirements.get("domain_inferred", "Unknown"),
+                requirements=requirements.get("functional_requirements", []) + requirements.get("non_functional_requirements", []),
+                scenario=body.scenario, compliance_mapping=compliance_mapping, quality=quality_result,
+            )
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Risk register failed: {e}")
 
         try:
             sdlc_result = recommend_sdlc(
@@ -280,7 +295,9 @@ def run_full_pipeline(body: ScenarioRequest):
         "scenario": body.scenario,
         "requirements": requirements,
         "compliance": compliance_result,
+        "compliance_mapping": compliance_mapping,
         "quality": quality_result,
+        "risk_register": risk_register,
         "sdlc_recommendation": sdlc_result,
         "meta": _meta(used),
     }

@@ -156,10 +156,50 @@ class RequirementsOutput(_NonEmptyText):
 
 # --- Agent 3: compliance ---------------------------------------------------
 
+COMPLIANCE_STATUSES = ("satisfied", "gap", "not_applicable")
+
+
 class Consideration(_NonEmptyText):
+    """
+    One compliance finding. `note` is the required control the source expects
+    (problem statement section 11). The section-11 analysis fields are
+    optional so a partial answer is not a hard failure: a missing status is
+    reported as "not_assessed" and an unverifiable evidence quote lowers the
+    confidence; both send the requirement to human review (compliance_mapping.py).
+    """
     related_requirement_ids: list[str] = Field(min_length=1)
     note: str = Field(min_length=1)
     source: str = Field(min_length=1)
+    status: Literal[COMPLIANCE_STATUSES] | None = None
+    evidence: str = ""                       # exact quote from the retrieved source text
+    compliance_gap: str | None = None        # required when status is "gap", else null
+    checkpoints: list[str] = Field(default_factory=list)              # mandatory approval or audit checkpoints
+    retention_and_reporting: list[str] = Field(default_factory=list)  # data-retention and reporting obligations
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _status_case(cls, v):
+        return v.strip().lower().replace(" ", "_").replace("-", "_") if isinstance(v, str) else v
+
+    @field_validator("compliance_gap", mode="before")
+    @classmethod
+    def _blank_gap_is_none(cls, v):
+        return None if isinstance(v, str) and not v.strip() else v
+
+    @field_validator("checkpoints", "retention_and_reporting")
+    @classmethod
+    def _no_blank_items(cls, v):
+        if any(not str(x).strip() for x in v):
+            raise ValueError("items must not be blank")
+        return [str(x).strip() for x in v]
+
+    @model_validator(mode="after")
+    def _gap_text_matches_status(self):
+        if self.status == "gap" and not self.compliance_gap:
+            raise ValueError("compliance_gap must describe the gap when status is 'gap'")
+        if self.status != "gap" and self.compliance_gap:
+            raise ValueError("compliance_gap must be null unless status is 'gap'")
+        return self
 
     @field_validator("related_requirement_ids")
     @classmethod

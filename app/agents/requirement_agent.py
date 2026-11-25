@@ -26,7 +26,12 @@ Rules:
 - Each requirement must be a single, clear, testable sentence (no vague statements like "should be good" or "fast").
 - Functional requirements describe WHAT the system does (features, behaviors, user actions).
 - Non-functional requirements describe HOW WELL the system does it (performance, security, usability, scalability, reliability, compliance, etc).
-- Assign each requirement a priority and a risk_level: "High", "Medium", or "Low". Priority = how critical it is to the system's core purpose. Risk level = the business, technical or compliance risk if it is wrong or missing. Do not mark everything High: reserve High for what the system cannot go live without.
+- priority ("High", "Medium" or "Low") = how critical the requirement is to the system's core purpose. Do not mark everything High: reserve High for what the system cannot go live without.
+- risk_level = the consequence if THIS requirement is implemented wrongly, using these anchors:
+  High: the failure directly causes a regulatory breach, a financial loss, a safety incident, or exposure of sensitive personal or financial data (e.g. identity verification, encryption of personal data, payment authorisation, safety interlocks).
+  Medium: the failure causes noticeable but recoverable harm - wrong or late information to users, a manual workaround, degraded performance (e.g. notifications, reports, response times).
+  Low: the failure is an inconvenience with no financial, legal, safety or data-exposure effect (e.g. display preferences, layout, optional convenience features).
+  Rate each requirement on its own consequence. Working in a regulated domain is not by itself a reason for High.
 - categories: one or more of {categories}. A requirement may belong to several.
 - source_stakeholder: exactly one of {roles}.
 - source_text: copy, word for word, the phrase (at least 2 words) from the scenario or an interview answer that this requirement comes from. If the requirement is not stated there and you are inferring it, use "" and list what you assumed in that requirement's "assumptions".

@@ -7,10 +7,11 @@ from fastapi.testclient import TestClient
 import app.agents.compliance_agent as comp_mod
 import app.agents.quality_agent as quality_mod
 import app.agents.requirement_agent as req_mod
+import app.agents.risk_agent as risk_mod
 import app.agents.sdlc_agent as sdlc_mod
 from app.agents.compliance_agent import attach_regulations
 from app.main import app
-from tests.helpers import record
+from tests.helpers import RISK_PROMPT_MARKER, record, risk_reply
 
 client = TestClient(app)
 SCENARIO = "A digital loan origination system that verifies applicant identity documents and explains credit decisions."
@@ -45,6 +46,8 @@ def router(conflicts=CONFLICTS, seen=None):
             return json.dumps(COMPLIANCE)
         if "requirements list for CONFLICTS" in prompt:
             return conflicts if isinstance(conflicts, str) else json.dumps(conflicts)
+        if RISK_PROMPT_MARKER in prompt:
+            return risk_reply()
         if "9 characteristics" in prompt:
             return json.dumps(TRAITS)
         return json.dumps(JUSTIFICATION)
@@ -57,7 +60,7 @@ def mocked(monkeypatch):
 
     def install(conflicts=CONFLICTS):
         fake = router(conflicts, seen)
-        for mod in (req_mod, comp_mod, quality_mod, sdlc_mod):
+        for mod in (req_mod, comp_mod, quality_mod, risk_mod, sdlc_mod):
             monkeypatch.setattr(mod, "generate_text", fake)
         monkeypatch.setattr(comp_mod, "retrieve_many", lambda qs, top_k=3: [[
             {"id": "kyc_aml-0", "source": "kyc_aml", "text": "KYC", "distance": 0.40},
@@ -71,7 +74,8 @@ def mocked(monkeypatch):
 def test_pipeline_returns_records_regulations_and_quality(mocked):
     mocked()
     d = client.post("/agents/pipeline", json={"scenario": SCENARIO}).json()
-    assert {"scenario", "requirements", "compliance", "quality", "sdlc_recommendation", "meta"} == set(d)
+    assert {"scenario", "requirements", "compliance", "compliance_mapping", "quality", "risk_register",
+            "sdlc_recommendation", "meta"} == set(d)
     fr1, fr2 = d["requirements"]["functional_requirements"]
     (nfr1,) = d["requirements"]["non_functional_requirements"]
     # domain-specific citations only; the generic baseline is not a regulation

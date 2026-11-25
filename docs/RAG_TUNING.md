@@ -63,20 +63,55 @@ Pairs whose source is not in GENERIC_SOURCES (general_security_baseline): 33 rel
 - At the chosen threshold 0.62: precision 0.93, recall 0.85, F0.5 0.915 (TP 28, FP 2, FN 5).
 - Best F0.5 on these pairs alone: 0.917 at 0.66 (precision 0.91, recall 0.94).
 
+## With domain applicability (current agent)
+
+Each unit is classified with the agent's `classify_domains()`; a pair can only be cited if its source applies to the unit's tags (`knowledge_base/sources.json`).
+
+| Scenario / domain | Domain tags |
+|---|---|
+| social_media | (none) |
+| payroll | (none) |
+| railway | (none) |
+| food_delivery | Card or online payments |
+| Digital Loan Origination | Loan origination and credit assessment |
+| Payment Gateway | Payment processing, Card or online payments |
+| Mobile Banking Application | Digital banking and mobile banking |
+| Telehealth Consultation Platform | Insurance and investment platforms, Healthcare |
+| Warehouse Inventory Management | (none) |
+| Mobile Puzzle Game | (none) |
+
+| Threshold | TP | FP | FN | Precision | Recall | F1 | F0.5 | 'Nothing applies' queries that would cite |
+|---|---|---|---|---|---|---|---|---|
+| 0.40 | 4 | 0 | 33 | 1.00 | 0.11 | 0.20 | 0.38 | 0/27 |
+| 0.45 | 7 | 0 | 30 | 1.00 | 0.19 | 0.32 | 0.54 | 0/27 |
+| 0.50 | 16 | 0 | 21 | 1.00 | 0.43 | 0.60 | 0.79 | 0/27 |
+| 0.55 | 23 | 0 | 14 | 1.00 | 0.62 | 0.77 | 0.89 | 0/27 |
+| 0.60 | 27 | 0 | 10 | 1.00 | 0.73 | 0.84 | 0.93 | 0/27 |
+| 0.62 **(agent)** | 30 | 0 | 7 | 1.00 | 0.81 | 0.90 | 0.96 | 0/27 |
+| 0.65 | 33 | 1 | 4 | 0.97 | 0.89 | 0.93 | 0.95 | 0/27 |
+| 0.66 | 34 | 1 | 3 | 0.97 | 0.92 | 0.94 | 0.96 | 0/27 |
+| 0.70 | 36 | 2 | 1 | 0.95 | 0.97 | 0.96 | 0.95 | 0/27 |
+| 0.75 | 37 | 6 | 0 | 0.86 | 1.00 | 0.92 | 0.89 | 4/27 |
+| 0.80 | 37 | 25 | 0 | 0.60 | 1.00 | 0.75 | 0.65 | 13/27 |
+| 0.85 | 37 | 45 | 0 | 0.45 | 1.00 | 0.62 | 0.51 | 23/27 |
+| 0.90 | 37 | 49 | 0 | 0.43 | 1.00 | 0.60 | 0.49 | 24/27 |
+
+At the agent's threshold 0.62: precision 1.00, recall 0.81, F0.5 0.955. Best F0.5 with applicability: 0.960 at 0.66 (precision 0.97, recall 0.92).
+
 ## kb_relevance per scenario (chosen format, agent threshold 0.62)
 
-| Scenario / domain | Requirements | Old rule (any source) | Current rule (domain-specific only) | Generic-baseline matches |
-|---|---|---|---|---|
-| social_media | 7 | partially_relevant | partially_relevant | NFR-3 |
-| payroll | 7 | partially_relevant | partially_relevant | NFR-2 |
-| railway | 7 | not_relevant | not_relevant | - |
-| food_delivery | 9 | partially_relevant | partially_relevant | - |
-| Digital Loan Origination | 3 | relevant | relevant | - |
-| Payment Gateway | 2 | relevant | relevant | - |
-| Mobile Banking Application | 3 | relevant | relevant | - |
-| Telehealth Consultation Platform | 2 | relevant | relevant | - |
-| Warehouse Inventory Management | 1 | not_relevant | not_relevant | - |
-| Mobile Puzzle Game | 1 | not_relevant | not_relevant | - |
+| Scenario / domain | Requirements | Old rule (any source) | Domain-specific only | Current rule (+ applies to domain) | Generic-baseline matches |
+|---|---|---|---|---|---|
+| social_media | 7 | partially_relevant | partially_relevant | partially_relevant | NFR-3 |
+| payroll | 7 | partially_relevant | partially_relevant | partially_relevant | NFR-2 |
+| railway | 7 | not_relevant | not_relevant | not_relevant | - |
+| food_delivery | 9 | partially_relevant | partially_relevant | partially_relevant | - |
+| Digital Loan Origination | 3 | relevant | relevant | relevant | - |
+| Payment Gateway | 2 | relevant | relevant | relevant | - |
+| Mobile Banking Application | 3 | relevant | relevant | relevant | - |
+| Telehealth Consultation Platform | 2 | relevant | relevant | relevant | - |
+| Warehouse Inventory Management | 1 | not_relevant | not_relevant | not_relevant | - |
+| Mobile Puzzle Game | 1 | not_relevant | not_relevant | not_relevant | - |
 
 ## Per-query nearest chunk
 

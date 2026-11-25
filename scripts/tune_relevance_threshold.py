@@ -25,12 +25,18 @@ What it does:
    only, and kb_relevance per scenario under the old rule (any source counts)
    and the current rule (only domain-specific sources count), at the agent's
    RELEVANCE_THRESHOLD.
+6. Domain applicability (knowledge_base/sources.json): each scenario/domain
+   unit is classified with the agent's own classify_domains(), and the sweep
+   is repeated on what the agent can actually cite - a pair counts as
+   positive only if it is under the threshold AND its source applies to the
+   unit's domain tags.
 """
 import json
 import statistics
 import sys
 from pathlib import Path
 
+from app.rag.kb_metadata import applies, classify_domains
 from app.rag.retriever import retrieve_many
 from app.agents.compliance_agent import (
     GENERIC_SOURCES, RELEVANCE_THRESHOLD, RELEVANT_COVERAGE, TOP_K_PER_QUERY, kb_relevance_from, merge_retrieval,
@@ -170,6 +176,41 @@ def main(write=False):
             f"- Best F0.5 on these pairs alone: {dom_top['f05']:.3f} at {dom_top['t']:.2f} "
             f"(precision {dom_top['p']:.2f}, recall {dom_top['r']:.2f})."]
 
+    # 6. Domain applicability: sweep on what the agent can actually cite
+    units = {}
+    for key, q in by_key.items():
+        units.setdefault(q["group"] if q["scenario"] else q["domain"], []).append(q)
+    unit_tags = {u: classify_domains([qs[0]["domain"] or u] + [q["text"] for q in qs]) for u, qs in units.items()}
+    app_pairs, app_by_key = [], {}
+    for u, qs in units.items():
+        for q in qs:
+            unsure = set(q.get("borderline_sources", []))
+            ok = [c for c in q["chunks"] if c["source"] not in unsure and applies(c["source"], unit_tags[u])]
+            app_by_key[(q["group"], q["id"])] = dict(q, min_d=min((c["distance"] for c in ok), default=9.0))
+            for c in q["chunks"]:
+                if c["source"] in unsure:
+                    continue
+                d = c["distance"] if applies(c["source"], unit_tags[u]) else 9.0  # never citable
+                app_pairs.append((d, c["source"] in q["relevant"]))
+    app_table = [_score(app_pairs, app_by_key, t) for t in THRESHOLDS]
+    app_top = max(app_table, key=lambda s: (round(s["f05"], 6), -s["t"]))
+    out += ["", "## With domain applicability (current agent)", "",
+            "Each unit is classified with the agent's `classify_domains()`; a pair can only be cited if its "
+            "source applies to the unit's tags (`knowledge_base/sources.json`).", "",
+            "| Scenario / domain | Domain tags |", "|---|---|"]
+    out += [f"| {u} | {', '.join(t) or '(none)'} |" for u, t in unit_tags.items()]
+    out += ["", "| Threshold | TP | FP | FN | Precision | Recall | F1 | F0.5 | 'Nothing applies' queries that would cite |",
+            "|---|---|---|---|---|---|---|---|---|"]
+    for row in app_table:
+        if round(row["t"] * 100) % 5 == 0 or row["t"] in (top["t"], app_top["t"]):
+            mark = " **(agent)**" if abs(row["t"] - RELEVANCE_THRESHOLD) < 1e-9 else ""
+            out.append(f"| {row['t']:.2f}{mark} | {row['tp']} | {row['fp']} | {row['fn']} | {row['p']:.2f} | "
+                       f"{row['r']:.2f} | {row['f1']:.2f} | {row['f05']:.2f} | {row['false_alarm']} |")
+    at_agent = next(r for r in app_table if abs(r["t"] - RELEVANCE_THRESHOLD) < 1e-9)
+    out += ["", f"At the agent's threshold {RELEVANCE_THRESHOLD}: precision {at_agent['p']:.2f}, recall {at_agent['r']:.2f}, "
+            f"F0.5 {at_agent['f05']:.3f}. Best F0.5 with applicability: {app_top['f05']:.3f} at {app_top['t']:.2f} "
+            f"(precision {app_top['p']:.2f}, recall {app_top['r']:.2f})."]
+
     # 5b. kb_relevance per scenario, old rule vs current rule
     def old_rule(reqs, relevant):
         matched = {rid for c in relevant for rid in c["matched_requirement_ids"]}
@@ -177,20 +218,20 @@ def main(write=False):
             return "not_relevant"
         return "relevant" if len(matched) / len(reqs) >= RELEVANT_COVERAGE else "partially_relevant"
 
-    units = {}
-    for key, q in by_key.items():
-        units.setdefault(q["group"] if q["scenario"] else q["domain"], []).append(q)
     out += ["", f"## kb_relevance per scenario (chosen format, agent threshold {RELEVANCE_THRESHOLD})", "",
-            "| Scenario / domain | Requirements | Old rule (any source) | Current rule (domain-specific only) | Generic-baseline matches |",
-            "|---|---|---|---|---|"]
+            "| Scenario / domain | Requirements | Old rule (any source) | Domain-specific only | Current rule (+ applies to domain) | Generic-baseline matches |",
+            "|---|---|---|---|---|---|"]
     for unit, qs in units.items():
         reqs = [{"id": q["id"]} for q in qs]
         merged = merge_retrieval(reqs, [q["chunks"] for q in qs])
         relevant = [c for c in merged if c["distance"] < RELEVANCE_THRESHOLD]
         generic = sorted({rid for c in relevant if c["source"] in GENERIC_SOURCES for rid in c["matched_requirement_ids"]})
-        new = kb_relevance_from(reqs, relevant)
+        mid = kb_relevance_from(reqs, relevant)
         old = old_rule(reqs, relevant)
-        out.append(f"| {unit} | {len(reqs)} | {old} | {new}{' (changed)' if new != old else ''} | "
+        for c in relevant:
+            c["applies_to_domain"] = applies(c["source"], unit_tags[unit])
+        new = kb_relevance_from(reqs, relevant)
+        out.append(f"| {unit} | {len(reqs)} | {old} | {mid} | {new}{' (changed)' if new != mid else ''} | "
                    f"{', '.join(generic) or '-'} |")
     out += ["",
             "## Per-query nearest chunk", "",

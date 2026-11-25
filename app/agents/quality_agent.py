@@ -3,8 +3,8 @@ Requirement quality and conflict checks (problem statement section 10).
 
 Deterministic rules first (no LLM):
 - ambiguity:  vague words from VAGUE_TERMS in the requirement statement
-- untestable: a non-functional requirement with no number anywhere in its
-              statement or acceptance criteria (nothing measurable to test)
+- untestable: a Performance or Availability-and-reliability NFR with no
+              number anywhere in its statement or acceptance criteria
 - duplicate:  two statements whose wording is near-identical
               (difflib ratio >= DUPLICATE_SIMILARITY after dropping "the system shall")
 Then ONE LLM call, only for conflicts (requirements that cannot both be met
@@ -42,6 +42,9 @@ _VAGUE_RE = re.compile(
     re.IGNORECASE,
 )
 _NUMBER_RE = re.compile(r"\d")
+# NFR categories that are only testable against a number (live loan run:
+# "immutable audit trail" was wrongly flagged when every NFR was checked).
+MEASURABLE_CATEGORIES = frozenset({"Performance", "Availability and reliability"})
 DUPLICATE_SIMILARITY = 0.92  # 0.90 flagged "encrypt payment data" vs "encrypt user data" (0.901)
 
 
@@ -69,8 +72,16 @@ def ambiguity_flags(reqs: list[dict]) -> list[dict]:
 
 
 def untestable_flags(nfrs: list[dict]) -> list[dict]:
+    """
+    Only NFRs categorised Performance or Availability and reliability: those
+    are testable only against a number. Other NFRs (e.g. an immutable audit
+    trail, encryption) can be verified without one, so "no number" would be a
+    false positive there. NFRs without categories are not checked.
+    """
     flags = []
     for r in nfrs:
+        if not MEASURABLE_CATEGORIES.intersection(r.get("categories") or []):
+            continue
         texts = [r["requirement"]] + list(r.get("acceptance_criteria") or [])
         if not any(_NUMBER_RE.search(t) for t in texts):
             flags.append(_flag([r["id"]], "untestable",

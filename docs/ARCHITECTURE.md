@@ -12,14 +12,17 @@ flowchart LR
     A[Scenario text] --> B[Agent 1<br/>Requirement records]
     B --> C[Agent 3<br/>Compliance and risk<br/>RAG over knowledge base]
     C -. applicable_regulations .-> B
+    C --> M[Compliance mapping<br/>per requirement, graded confidence,<br/>review flags]
     B --> Q[Quality check<br/>rules + 1 LLM call for conflicts]
+    M --> R[Risk register<br/>likelihood x impact]
+    Q --> R
     B --> D[Agent 2<br/>SDLC trait extraction]
     D --> E[Deterministic scoring engine<br/>9 traits x 5 model profiles]
     E --> F[Recommendation + justification<br/>+ why-not explanations]
     C -. shown as Stage 2 in the UI .-> F
 ```
 
-In the UI the stages run as three separate calls: `/agents/requirements`, `/agents/compliance`, `/agents/sdlc`. The interview (`/agents/interview`, `/agents/interview/templates`) and quality check (`/agents/quality`) are API-only for now. `/agents/pipeline` runs requirements -> compliance -> quality -> SDLC in one request (5 LLM calls) and returns all four results; it accepts the same optional interview `answers` as `/agents/requirements`.
+In the UI the stages run as three separate calls: `/agents/requirements`, `/agents/compliance`, `/agents/sdlc`. The interview (`/agents/interview`, `/agents/interview/templates`) and quality check (`/agents/quality`) are API-only for now. `/agents/pipeline` runs requirements -> compliance (+ mapping) -> quality -> risk register -> SDLC in one request (6 LLM calls) and returns all of them, with `compliance_mapping` and `risk_register` as top-level keys; it accepts the same optional interview `answers` as `/agents/requirements`.
 
 Note: the compliance result is displayed to the user but is not currently fed into the SDLC trait extraction. Both agents work from the same requirement list. Feeding compliance findings into criticality/verification scoring is a possible future improvement.
 
@@ -29,7 +32,10 @@ Note: the compliance result is displayed to the user but is not currently fed in
 |---|---|---|
 | Requirement agent | `app/agents/requirement_agent.py` | Scenario + interview answers to requirement records (problem statement section 8 fields) |
 | Interview agent | `app/agents/interview_agent.py`, `interview_templates.py` | Role-specific question templates (plain data) and the next follow-up questions (one LLM call) |
-| Quality check | `app/agents/quality_agent.py` | Ambiguity, untestable NFRs and near-duplicates by rules; conflicts by one LLM call |
+| Quality check | `app/agents/quality_agent.py` | Ambiguity, untestable Performance/Availability NFRs and near-duplicates by rules; conflicts by one LLM call |
+| Compliance mapping | `app/agents/compliance_mapping.py` | Per-requirement section-11 mapping; code sets metadata, confidence and review flags |
+| Risk register | `app/agents/risk_agent.py` | Risks with rubric-anchored likelihood and impact (one LLM call); score, level and rank in code |
+| KB metadata | `knowledge_base/sources.json`, `app/rag/kb_metadata.py` | Source, jurisdiction, version, effective date and applicability per KB document; rule-based domain classification |
 | Vocabulary | `app/vocabulary.py` | Stakeholder roles, interview topics, requirement categories and approval statuses, word for word from the problem statement |
 | Compliance agent | `app/agents/compliance_agent.py` | One retrieval query per requirement, keep chunks under the threshold, compute `kb_relevance`, ground findings only in kept chunks, drop unsupported citations, report risk level |
 | Output schemas | `app/schemas.py` (+ interview/quality modules) | Pydantic schemas for every LLM reply; validate, retry once, else 502 |
@@ -93,15 +99,42 @@ Why 9 traits: with only clarity, volatility, complexity and criticality, Spiral 
 
 1. One query per requirement (the requirement text), embedded in one batch; top 3 chunks each.
 2. Chunks are merged, keeping each chunk's closest distance and the requirements that matched it under the threshold.
-3. Only chunks with squared-L2 distance below **0.62** go into the prompt (at most 8).
-4. `kb_relevance` is computed, not generated, and only **domain-specific** sources count: no requirement matched a domain-specific chunk = `not_relevant`; at least half did = `relevant`; otherwise `partially_relevant`. Sources listed in `GENERIC_SOURCES` (currently `general_security_baseline`, whose own title says it is domain-agnostic) apply to almost any system, so matching them says nothing about domain coverage. The rule is defined per source and applies to every domain; there are no per-domain cases. Relevance is computed from every chunk under the threshold, before the 8-chunk prompt cap.
-5. The LLM's considerations are schema-checked (known requirement IDs, real KB source names; invented names trigger the retry). Considerations citing a real source that was not among the kept chunks are dropped and listed in `dropped_considerations`; generic-baseline citations are kept even when `kb_relevance` is `not_relevant`, and every consideration carries `scope`: `"generic baseline"` or `"domain-specific"`.
+3. The scenario is classified into domain tags by keyword rules over the domain label, the scenario and the requirement statements (`classify_domains`; problem statement section 6, step 1). Tags are the eight financial services from section 1 plus "Healthcare" and "Card or online payments" (an activity: card-payment security applies to a food-delivery app, KYC/AML does not). A source applies if its `applies_to` in `knowledge_base/sources.json` is `any` or shares a tag.
+4. Only chunks with squared-L2 distance below **0.62** whose source applies to the domain go into the prompt (at most 8). Chunks from sources for other domains are reported with `applies_to_domain: false`, never cited and never counted.
+5. `kb_relevance` is computed, not generated, and only **domain-specific** sources that **apply to the domain** count: no requirement matched a domain-specific chunk = `not_relevant`; at least half did = `relevant`; otherwise `partially_relevant`. Sources listed in `GENERIC_SOURCES` (currently `general_security_baseline`, whose own title says it is domain-agnostic) apply to almost any system, so matching them says nothing about domain coverage. The rule is defined per source and applies to every domain; there are no per-domain cases. Relevance is computed from every chunk under the threshold, before the 8-chunk prompt cap.
+6. The LLM's considerations are schema-checked (known requirement IDs, real KB source names; invented names trigger the retry). Considerations citing a real source that was not among the kept chunks are dropped and listed in `dropped_considerations`; generic-baseline citations are kept even when `kb_relevance` is `not_relevant`, and every consideration carries `scope`: `"generic baseline"` or `"domain-specific"`.
 
-The response keeps its original keys and adds `retrieved_chunks` (id, source, scope, distance, matched requirement IDs), `dropped_considerations`, and a `scope` field on each consideration. The current UI shows the source name but not the `scope` label.
+The response keeps its original keys and adds `domain_tags`, `retrieved_chunks` (id, source, scope, distance, matched requirement IDs, `applies_to_domain`), `dropped_considerations`, `compliance_mapping`, and on each consideration `scope` plus the section-11 analysis fields. The current UI shows the source name but not the `scope` label.
 
 Re-running the tuning set after this rule (2026-11-25) gave an identical sweep: threshold 0.62, precision 0.94, recall 0.81, as expected, since the rule changes how matches are aggregated, not which chunks pass. On domain-specific pairs alone, precision is 0.93 and recall 0.85 at 0.62. No tuning-set scenario changes label (none is baseline-only). Re-scoring the saved live railway runs, 1 and 3 change from `partially_relevant` to `not_relevant`, keeping their baseline citation.
 
+Domain applicability rerun (2026-11-25): the threshold-stage sweep is unchanged (0.62, precision 0.94, recall 0.81). Counting only what the agent can now cite (under the threshold and applicable to the unit's domain), precision at 0.62 rises to 1.00 with recall unchanged at 0.81 (F0.5 0.909 to 0.955): both remaining false positives were cross-domain. On that basis the best threshold would be 0.66 (precision 0.97, recall 0.92, F0.5 0.960); 0.62 is kept until that trade-off is decided. Re-scoring the saved live runs: the social-media run whose logging requirement matched KYC/AML (0.60) now comes out `not_relevant`, and payroll keeps `partially_relevant` through `data_protection` with KYC/AML and payment security excluded.
+
 Threshold tuning ([docs/RAG_TUNING.md](RAG_TUNING.md)): the old single concatenated query gave distances of 0.67-0.82 for all four evaluation scenarios, so nothing ever passed 0.65. With one query per requirement, labelled relevant pairs have a median distance of 0.52 and irrelevant pairs 0.80. The threshold was chosen by best F0.5 (precision weighted twice as much as recall, because a wrong citation is worse than a missing one) on a hand-labelled set of 42 queries: 0.62 gives precision 0.94 and recall 0.81, and none of the 27 "nothing applies" queries is cited. Caveats: one person labelled the set and it is small, and the railway event-logging requirement's nearest chunk (KYC/AML transaction logging, clearly irrelevant) sits at 0.626, only 0.006 above the threshold.
+
+## Compliance mapping
+
+`compliance_mapping` (in `/agents/compliance` and as a top-level key of `/agents/pipeline`) has one entry per requirement: `requirement_id`, `mappings`, `needs_human_review`, `review_reasons`, plus a `notice` that this is not a legal determination and a `review_count`. Each mapping follows problem statement section 11:
+
+| Field | Set by | Meaning |
+|---|---|---|
+| `source`, `regulation`, `scope` | code | KB source, its title, generic baseline or domain-specific |
+| `jurisdiction`, `version`, `effective_date` | code | from `knowledge_base/sources.json` (version and date of the KB entry, not of the law) |
+| `chunk_id`, `distance` | code | the closest retrieved match for this requirement and source; `null` if the model cited the source without a match for this requirement |
+| `status` | LLM | `satisfied`, `gap` or `not_applicable`; `not_assessed` (code) when a retrieved match was not assessed |
+| `required_control` | LLM | the control the source expects (the consideration's `note`) |
+| `evidence`, `evidence_verified` | LLM, checked by code | a quote from the retrieved source text; verified if at least 5 words appear in it (case and punctuation ignored) |
+| `compliance_gap` | LLM | required when `status` is `gap`, otherwise null |
+| `checkpoints`, `retention_and_reporting` | LLM | mandatory approval or audit checkpoints; data-retention and reporting obligations |
+| `confidence` | code | High: distance < 0.50 and evidence verified; Medium: < 0.55 and verified; otherwise Low. The bands come from the tuning set: relevant pairs have a median of 0.52 and no irrelevant pair was closer than 0.551 |
+
+`needs_human_review` is set, with a reason for each, when a mapping is Low confidence, was not assessed, was judged not applicable (retrieval and analysis disagree), was cited without a retrieval match, or is a gap on a requirement whose `risk_level` is High (section 11: high-impact interpretations need compliance or legal approval), and when a requirement categorised Regulatory has no domain-specific support (section 6: escalate unsupported output). It is a flag; nothing routes or approves it yet.
+
+## Risk register
+
+`risk_register` (pipeline only) lists 3-10 risks from one LLM call. The model writes the description, category (Business, Technical, Compliance, Security), mitigation, linked requirement ids, and likelihood and impact on anchored 1-5 rubrics (`LIKELIHOOD_RUBRIC`, `IMPACT_RUBRIC` in `app/agents/risk_agent.py`), each with a reason. Code computes `score` = likelihood x impact, `level` (High >= 10, Medium 5-9, Low 1-4), the ranking (score, then impact, then likelihood) and the `RISK-n` ids, and adds a summary with the level, likelihood and impact distributions. The prompt includes compliance gaps (mappings with status `gap`) and quality flags. Review flags are left out: most say a knowledge-base match is uncertain, not that a control is missing, and in the first live loan run they pushed every likelihood to 4-5. The statement names a "threat and risk register" and "business, technical and compliance risks" but no register fields; the fields follow the project plan.
+
+Requirement `risk_level` (Agent 1) now has anchors too. In the Phase 1 loan run 6 of 8 requirements were High because the prompt defined risk only as "the risk if it is wrong or missing" with no scale, which almost anything in a regulated domain meets. The anchors now judge the consequence of that requirement failing (High: regulatory breach, financial loss, safety incident or sensitive-data exposure; Medium: recoverable harm; Low: inconvenience), and say a regulated domain is not by itself a reason for High.
 
 ## Scoring analysis
 
@@ -141,7 +174,7 @@ Whatever the LLM sends for the code-set fields is overwritten, so it cannot appr
 `POST /agents/quality` (and the `quality` key of `/agents/pipeline`) returns `flags` and `counts`. Each flag has `requirement_ids`, `type`, `reason`, `suggested_fix` and `detected_by`:
 
 - **ambiguity** (rule): vague terms from `VAGUE_TERMS` (e.g. fast, user-friendly, secure, etc.) in the statement, matched on word boundaries; the fix points to a measurable acceptance criterion when one exists.
-- **untestable** (rule): a non-functional requirement with no number anywhere in its statement or acceptance criteria.
+- **untestable** (rule): a non-functional requirement categorised Performance or Availability and reliability with no number anywhere in its statement or acceptance criteria. Other NFRs (an immutable audit trail, encryption) are testable without a number; checking them all produced a false positive in the Phase 1 live run.
 - **duplicate** (rule): `difflib` similarity of at least 0.92 after removing "the system shall". 0.90 wrongly paired "encrypt payment data" with "encrypt user data".
 - **conflict** (one LLM call, schema-checked): requirements that cannot all be met as written; at least two known ids; an empty list is a valid answer. Skipped when there are fewer than two requirements.
 
@@ -152,7 +185,9 @@ Whatever the LLM sends for the code-set fields is overwritten, so it cannot appr
 - The relevance threshold (0.62) was tuned on a small single-labeller set (see above); the `kb_relevance` coverage rules (any match / half of the requirements) are a design choice.
 - The risk level is still the LLM's judgement, not derived from the knowledge base.
 - Requirement `priority`, `risk_level` and `categories` are LLM judgements checked only for allowed values; their accuracy is not measured.
-- The quality rules are heuristics: the vague-term list is curated by hand, "untestable" only means "no number", and the duplicate check compares wording, not meaning. Quality flags are reported but not yet sent back to the interview step.
+- The quality rules are heuristics: the vague-term list is curated by hand, "untestable" only means "a Performance/Availability NFR with no number", and the duplicate check compares wording, not meaning. Quality flags are reported but not yet sent back to the interview step.
 - `approval_status` is always `proposed`: there is no human accept/reject/modify step yet.
-- Similarity alone cannot tell which domain a principle belongs to. Generic-baseline matches no longer count toward `kb_relevance` (railway's "99.999% availability" requirement matched the baseline's availability paragraph at 0.57-0.61 in 2 of 3 live runs; those runs now come out `not_relevant`, with the citation kept and labelled "generic baseline"). Cross-domain matches between *domain-specific* sources are still possible and still count: in live runs a payroll audit-trail requirement and a social-media event-logging requirement both matched the KYC/AML transaction-logging paragraph (about 0.60), and the social-media run stayed `partially_relevant` because of it. Ruling those out needs per-source applicability metadata (which domains a document applies to).
+- Similarity alone cannot tell which domain a principle belongs to; two rules now compensate. Generic-baseline matches never count toward `kb_relevance`, and sources only apply to the domains listed in `knowledge_base/sources.json` (so payroll's and social media's matches to the KYC/AML logging paragraph no longer count or get cited). The domain classifier is keyword-based: a scenario that never uses the expected words (e.g. a lending system described only as "advances to customers") gets no tags, and its domain-specific sources are excluded. The tags are in the response so a reviewer can see this.
+- In the Phase 2 live loan run, 4 of 8 requirements were flagged for review, all because their best match fell in the 0.55-0.62 Low band, although the matches were correct (e.g. fair_lending for decline reasons at 0.58). The Low band is where relevant and irrelevant pairs overlap in the tuning set, so it trades review effort for caution.
+- Compliance `status`, the required control and the risk register's likelihood and impact are LLM judgements, checked only for allowed values and (for evidence) quotes; their accuracy is not measured. The confidence bands come from a small single-labeller tuning set.
 - No confidence percentages are shown, because none are computed.

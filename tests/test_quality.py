@@ -10,8 +10,8 @@ from app.main import app
 client = TestClient(app)
 
 
-def req(rid, text, criteria=None):
-    return {"id": rid, "requirement": text, "acceptance_criteria": criteria or []}
+def req(rid, text, criteria=None, categories=None):
+    return {"id": rid, "requirement": text, "acceptance_criteria": criteria or [], "categories": categories or []}
 
 
 def scripted(*replies):
@@ -52,14 +52,23 @@ def test_fix_points_to_a_measurable_acceptance_criterion_when_there_is_one():
 
 # --- untestable (rule) ----------------------------------------------------------
 
-def test_nfr_without_any_number_is_untestable():
-    (f,) = qa.untestable_flags([req("NFR-1", "The system shall be highly reliable.", ["It rarely fails"])])
+@pytest.mark.parametrize("category", ["Performance", "Availability and reliability"])
+def test_measurable_category_nfr_without_any_number_is_untestable(category):
+    (f,) = qa.untestable_flags([req("NFR-1", "The system shall be highly reliable.", ["It rarely fails"], [category, "Security"])])
     assert f["type"] == "untestable" and f["requirement_ids"] == ["NFR-1"]
 
 
 def test_number_in_statement_or_criteria_makes_it_testable():
-    assert qa.untestable_flags([req("NFR-1", "Availability shall be 99.9% per month.")]) == []
-    assert qa.untestable_flags([req("NFR-2", "Pages shall load quickly.", ["p95 load time under 2 s"])]) == []
+    assert qa.untestable_flags([req("NFR-1", "Availability shall be 99.9% per month.", categories=["Availability and reliability"])]) == []
+    assert qa.untestable_flags([req("NFR-2", "Pages shall load quickly.", ["p95 load time under 2 s"], ["Performance"])]) == []
+
+
+@pytest.mark.parametrize("categories", [["Audit and reporting", "Security", "Regulatory"], ["Privacy"], []])
+def test_other_or_missing_categories_are_not_checked_for_numbers(categories):
+    # Live loan run: "maintain an immutable audit trail" is testable without a number.
+    nfr = req("NFR-1", "The system shall maintain an immutable audit trail of every credit decision.",
+              ["Audit logs cannot be modified or deleted by standard system users"], categories)
+    assert qa.untestable_flags([nfr]) == []
 
 
 # --- duplicates (rule) ----------------------------------------------------------

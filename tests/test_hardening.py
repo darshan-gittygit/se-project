@@ -9,7 +9,7 @@ from google.genai import errors as genai_errors
 
 import app.gemini_client as gc
 from app.main import MAX_SCENARIO_CHARS, MAX_REQUIREMENTS_PER_LIST, app
-from tests.helpers import record
+from tests.helpers import RISK_PROMPT_MARKER, record, risk_reply
 
 client = TestClient(app)
 PRIMARY, FALLBACK = gc._candidate_models()[0], gc._candidate_models()[1]
@@ -40,6 +40,8 @@ def api_error(cls, code, status, details=None):
 def reply_for(prompt):
     if "business analyst" in prompt:
         return json.dumps(REQS)
+    if RISK_PROMPT_MARKER in prompt:
+        return risk_reply()
     if "9 characteristics" in prompt:
         return json.dumps(TRAITS)
     return json.dumps(JUSTIFICATION)
@@ -90,8 +92,8 @@ def test_pipeline_has_meta_for_all_calls(fake_sdk, monkeypatch):
         json.dumps({"risk_level": "Low", "considerations": [], "summary": "s"})
         if "compliance and risk analyst" in prompt else reply_for(prompt))
     d = client.post("/agents/pipeline", json={"scenario": "A payroll system for a company"}).json()
-    assert d["meta"]["models_used"] == [PRIMARY] * 5  # requirements, compliance, conflicts, traits, justification
-    assert {"scenario", "requirements", "compliance", "quality", "sdlc_recommendation"} <= set(d)
+    assert d["meta"]["models_used"] == [PRIMARY] * 6  # requirements, compliance, conflicts, risks, traits, justification
+    assert {"scenario", "requirements", "compliance", "compliance_mapping", "quality", "risk_register", "sdlc_recommendation"} <= set(d)
 
 
 def test_tracking_does_not_leak_between_requests(fake_sdk):

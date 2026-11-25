@@ -24,7 +24,9 @@ Pipeline:
    "not_relevant" - and every consideration and retrieved chunk carries a
    "scope" label: "generic baseline" or "domain-specific".
 """
+from app.agents.compliance_mapping import build_mapping
 from app.gemini_client import generate_text
+from app.rag.kb_metadata import applies, classify_domains, generic_sources
 from app.rag.retriever import known_sources, retrieve_many
 from app.schemas import ComplianceOutput, generate_validated
 
@@ -39,10 +41,10 @@ TOP_K_PER_QUERY = 3          # chunks retrieved per requirement query
 MAX_CONTEXT_CHUNKS = 8       # cap on relevant chunks passed to the LLM
 RELEVANT_COVERAGE = 0.5      # share of requirements with a domain-specific match for "relevant"
 
-# Knowledge-base documents that are domain-agnostic by design (the file's own
-# title says so). They can be cited, labelled SCOPE_GENERIC, but never count
-# toward kb_relevance. Defined per source, never per domain.
-GENERIC_SOURCES = frozenset({"general_security_baseline"})
+# Knowledge-base documents that are domain-agnostic by design, marked
+# "generic_baseline" in knowledge_base/sources.json. They can be cited,
+# labelled SCOPE_GENERIC, but never count toward kb_relevance.
+GENERIC_SOURCES = generic_sources()
 SCOPE_GENERIC = "generic baseline"
 SCOPE_DOMAIN = "domain-specific"
 
@@ -71,13 +73,22 @@ Instructions:
 - Reference only requirement IDs that appear in the lists above.
 - If knowledge base relevance is "not_relevant", cite only generic baseline sources (if any), and say in the summary that the knowledge base has no domain-specific coverage for this domain.
 - Never present a generic baseline principle as a domain-specific regulation.
+- Assess every requirement-source match shown above. For each consideration give:
+  - "note": the security, privacy or compliance control the source expects for these requirements;
+  - "status": "satisfied" if the requirements as written already meet it, "gap" if they do not (then describe what is missing in "compliance_gap"), or "not_applicable" if the match is a false hit;
+  - "evidence": a word-for-word quote (at least 5 words) from the retrieved source text that supports the control;
+  - "checkpoints": mandatory approval or audit checkpoints the source implies ([] if none);
+  - "retention_and_reporting": data-retention and reporting obligations the source implies ([] if none).
+- Do not make final legal determinations.
 - Rate the overall compliance/regulatory risk level for this project as "Low", "Medium", or "High", based on how much sensitive data, financial risk, or regulated activity the requirements imply.
 
 Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this schema:
 {{
   "risk_level": "Low" | "Medium" | "High",
   "considerations": [
-    {{"related_requirement_ids": ["FR-1"], "note": "...", "source": "kb_source_name"}}
+    {{"related_requirement_ids": ["FR-1"], "note": "...", "source": "kb_source_name",
+      "status": "satisfied" | "gap" | "not_applicable", "evidence": "exact quote from the source text",
+      "compliance_gap": null or "what is missing", "checkpoints": [], "retention_and_reporting": []}}
   ],
   "summary": "2-3 sentence overall compliance summary"
 }}
@@ -120,9 +131,12 @@ def merge_retrieval(requirements: list[dict], per_query: list[list[dict]]) -> li
 def kb_relevance_from(requirements: list[dict], relevant_chunks: list[dict]) -> str:
     """
     Deterministic relevance label from how many requirements matched a
-    relevant DOMAIN-SPECIFIC chunk. Generic-baseline chunks are ignored here.
+    relevant DOMAIN-SPECIFIC chunk whose source applies to the scenario's
+    domain (knowledge_base/sources.json "applies_to"). Generic-baseline chunks
+    and chunks from sources for other domains are ignored here.
     """
-    matched = {rid for c in relevant_chunks if c["source"] not in GENERIC_SOURCES
+    matched = {rid for c in relevant_chunks
+               if c["source"] not in GENERIC_SOURCES and c.get("applies_to_domain", True)
                for rid in c["matched_requirement_ids"]}
     if not matched:
         return "not_relevant"
@@ -152,15 +166,24 @@ def filter_considerations(considerations: list[dict], allowed_sources: set[str])
     return kept, dropped
 
 
-def analyze_compliance(domain: str, functional_requirements: list[dict], non_functional_requirements: list[dict]) -> dict:
+def analyze_compliance(domain: str, functional_requirements: list[dict], non_functional_requirements: list[dict],
+                       scenario: str | None = None) -> dict:
     requirements = functional_requirements + non_functional_requirements
     per_query = retrieve_many(build_queries(domain, requirements), top_k=TOP_K_PER_QUERY)
     merged = merge_retrieval(requirements, per_query)
-    all_relevant = [c for c in merged if c["distance"] < RELEVANCE_THRESHOLD]
-    # Relevance uses every chunk under the threshold; the cap only limits the
-    # prompt (otherwise closer generic chunks could crowd out a domain match).
-    kb_relevance = kb_relevance_from(requirements, all_relevant)
-    relevant = all_relevant[:MAX_CONTEXT_CHUNKS]
+    # Which KB sources apply: deterministic domain tags from the domain label,
+    # the scenario (when given) and the requirement statements.
+    domain_tags = classify_domains([domain, scenario or ""] + [r["requirement"] for r in requirements])
+    for c in merged:
+        c["applies_to_domain"] = applies(c["source"], domain_tags)
+    under_threshold = [c for c in merged if c["distance"] < RELEVANCE_THRESHOLD]
+    # Chunks from sources for other domains (e.g. KYC/AML for payroll) never
+    # reach the prompt, cannot be cited and do not count toward relevance.
+    applicable = [c for c in under_threshold if c["applies_to_domain"]]
+    # Relevance uses every applicable chunk under the threshold; the cap only limits
+    # the prompt (otherwise closer generic chunks could crowd out a domain match).
+    kb_relevance = kb_relevance_from(requirements, applicable)
+    relevant = applicable[:MAX_CONTEXT_CHUNKS]
     sources_used = sorted({c["source"] for c in relevant})
 
     prompt = PROMPT_TEMPLATE.format(
@@ -187,19 +210,26 @@ def analyze_compliance(domain: str, functional_requirements: list[dict], non_fun
         dropped += [{**c, "reason": "no domain-specific knowledge base coverage"}
                     for c in kept if c["source"] not in GENERIC_SOURCES]
         kept = [c for c in kept if c["source"] in GENERIC_SOURCES]
-    kept = [{**c, "scope": source_scope(c["source"])} for c in kept]
+    # Per-requirement mapping (section 11) with code-set metadata, confidence and
+    # review flags. Findings judged not applicable stay in the mapping (and send
+    # the requirement to review) but are not citations.
+    compliance_mapping = build_mapping(requirements, kept, relevant, source_scope, GENERIC_SOURCES)
+    kept = [{**c, "scope": source_scope(c["source"])} for c in kept if c.get("status") != "not_applicable"]
 
     result["kb_relevance"] = kb_relevance
     result["considerations"] = kept
     result["sources_consulted"] = sorted({c["source"] for c in merged})
     result["sources_used"] = sources_used
     # Additive fields: the evidence behind kb_relevance and any filtered output.
+    result["domain_tags"] = domain_tags
     result["retrieved_chunks"] = [
         {"id": c["id"], "source": c["source"], "scope": source_scope(c["source"]),
-         "distance": round(c["distance"], 4), "matched_requirement_ids": c["matched_requirement_ids"]}
-        for c in relevant
+         "distance": round(c["distance"], 4), "matched_requirement_ids": c["matched_requirement_ids"],
+         "applies_to_domain": c["applies_to_domain"]}
+        for c in under_threshold
     ]
     result["dropped_considerations"] = dropped
+    result["compliance_mapping"] = compliance_mapping
     return result
 
 

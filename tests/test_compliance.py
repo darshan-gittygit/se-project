@@ -149,7 +149,8 @@ def test_baseline_only_match_is_not_relevant_but_citation_is_kept_and_labelled(m
     seen = install(monkeypatch, per_req, dict(REPLY, considerations=[BASELINE_CITE]))
     d = comp.analyze_compliance("Railway Signalling", FR, NFR)
     assert d["kb_relevance"] == "not_relevant"
-    assert d["considerations"] == [dict(BASELINE_CITE, scope=SCOPE_GENERIC)]
+    (cited,) = d["considerations"]
+    assert {k: cited[k] for k in (*BASELINE_CITE, "scope")} == dict(BASELINE_CITE, scope=SCOPE_GENERIC)
     assert d["dropped_considerations"] == []
     assert d["sources_used"] == ["general_security_baseline"]
     assert [c["scope"] for c in d["retrieved_chunks"]] == [SCOPE_GENERIC]
@@ -226,8 +227,90 @@ def test_prompt_cap_does_not_hide_a_domain_match_from_kb_relevance(monkeypatch):
     reqs = [{"id": f"FR-{i}", "requirement": f"req {i}"} for i in range(1, 11)]
     per_req = {r["requirement"]: [chunk(f"general_security_baseline-{i}", 0.30 + i / 100)]
                for i, r in enumerate(reqs[:9])}
-    per_req[reqs[9]["requirement"]] = [chunk("payment_security-1", 0.60)]
-    install(monkeypatch, per_req, dict(REPLY, considerations=[]))
+    per_req[reqs[9]["requirement"]] = [chunk("data_protection-1", 0.60)]
+    seen = install(monkeypatch, per_req, dict(REPLY, considerations=[]))
     d = comp.analyze_compliance("X", reqs[:5], reqs[5:])
-    assert len(d["retrieved_chunks"]) == comp.MAX_CONTEXT_CHUNKS
+    assert seen["prompt"].count("[Source:") == comp.MAX_CONTEXT_CHUNKS
+    assert len(d["retrieved_chunks"]) == 10  # every chunk under the threshold is reported
     assert d["kb_relevance"] == "partially_relevant"
+
+
+# --- Phase 2: only sources that apply to the scenario's domain count ---------
+
+from app.rag.kb_metadata import DOMAIN_TAGS, applies, classify_domains, load_metadata, source_info
+
+PAYROLL = [{"id": "FR-1", "requirement": "The system shall keep an audit trail of all payroll overrides."},
+           {"id": "FR-2", "requirement": "The system shall generate monthly payslips."},
+           {"id": "NFR-1", "requirement": "The system shall encrypt employee salary data at rest."},
+           {"id": "NFR-2", "requirement": "The system shall finish a payroll run within 4 hours."}]
+
+
+def test_metadata_covers_every_kb_document_with_the_section_5_fields():
+    meta = load_metadata()
+    assert set(meta) == set(known_sources())
+    for name, m in meta.items():
+        assert m["source"] and m["jurisdiction"] and m["version"] and m["effective_date"], name
+        assert m["applies_to"] and all(t == "any" or t in DOMAIN_TAGS for t in m["applies_to"]), name
+    assert source_info("kyc_aml")["jurisdiction"].startswith("India")
+
+
+def test_financial_domain_tags_are_quoted_from_section_1():
+    from pathlib import Path
+    text = (Path(__file__).resolve().parent.parent / "docs" / "PROBLEM_STATEMENT.md").read_text(encoding="utf-8")
+    for tag in DOMAIN_TAGS:
+        if tag not in ("Healthcare", "Card or online payments"):
+            assert f"- {tag}" in text, tag
+
+
+@pytest.mark.parametrize("texts, expected", [
+    (["Enterprise Payroll Processing System", "calculate salaries and payslips"], []),
+    (["Social Media Platform", "log user interaction events"], []),
+    (["Digital Loan Origination", "verify KYC documents"], ["Loan origination and credit assessment", "Customer onboarding and KYC"]),
+    (["Food Delivery Platform", "The system shall process secure digital payments."], ["Card or online payments"]),
+    (["Telehealth", "encrypt patient consultation video"], ["Healthcare"]),
+])
+def test_domain_classification(texts, expected):
+    assert classify_domains(texts) == expected
+
+
+def test_applicability_rules():
+    assert applies("kyc_aml", ["Loan origination and credit assessment"])
+    assert not applies("kyc_aml", [])                       # payroll, social media, railway
+    assert not applies("kyc_aml", ["Card or online payments"])  # a shop taking card payments is not a KYC institution
+    assert applies("payment_security", ["Card or online payments"])
+    assert applies("data_protection", []) and applies("general_security_baseline", [])
+    assert not applies("not_a_source", ["Healthcare"])
+
+
+def test_payroll_audit_trail_matching_the_aml_paragraph_does_not_count(monkeypatch):
+    # Known weakness from the live runs: payroll's audit-trail requirement matched
+    # the KYC/AML transaction-logging paragraph at about 0.60.
+    per_req = {PAYROLL[0]["requirement"]: [chunk("kyc_aml-2", 0.5996)],
+               PAYROLL[2]["requirement"]: [chunk("data_protection-1", 0.55)]}
+    reply = dict(REPLY, considerations=[
+        {"related_requirement_ids": ["FR-1"], "note": "AML logging", "source": "kyc_aml"},
+        {"related_requirement_ids": ["NFR-1"], "note": "encrypt personal data", "source": "data_protection"}])
+    seen = install(monkeypatch, per_req, reply)
+    d = comp.analyze_compliance("Enterprise Payroll Processing System", PAYROLL[:2], PAYROLL[2:])
+    assert d["domain_tags"] == []
+    assert d["kb_relevance"] == "partially_relevant"  # 1 of 4 (counting KYC/AML would make it 2 of 4: "relevant")
+    assert d["sources_used"] == ["data_protection"]
+    assert [c["source"] for c in d["considerations"]] == ["data_protection"]
+    assert [c["source"] for c in d["dropped_considerations"]] == ["kyc_aml"]
+    assert "kyc_aml" not in seen["prompt"]
+    assert {c["source"]: c["applies_to_domain"] for c in d["retrieved_chunks"]} == {"kyc_aml": False, "data_protection": True}
+
+
+def test_same_match_counts_when_the_domain_is_lending(monkeypatch):
+    per_req = {PAYROLL[0]["requirement"]: [chunk("kyc_aml-2", 0.5996)],
+               PAYROLL[2]["requirement"]: [chunk("data_protection-1", 0.55)]}
+    install(monkeypatch, per_req, dict(REPLY, considerations=[]))
+    d = comp.analyze_compliance("Digital Loan Origination", PAYROLL[:2], PAYROLL[2:])
+    assert d["kb_relevance"] == "relevant" and d["sources_used"] == ["data_protection", "kyc_aml"]
+
+
+def test_scenario_text_contributes_to_domain_tags(monkeypatch):
+    install(monkeypatch, {}, dict(REPLY, considerations=[]))
+    d = comp.analyze_compliance("Back-office system", PAYROLL[:2], PAYROLL[2:],
+                                scenario="Staff process loan applications and credit checks.")
+    assert d["domain_tags"] == ["Loan origination and credit assessment"]
