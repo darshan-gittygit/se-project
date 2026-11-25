@@ -14,6 +14,9 @@ chroma_db/
 # local database (pipeline runs, approvals, audit log)
 data/
 
+# offline (mocked) evaluation runs - harness tests only
+eval/results/*-offline/
+
 # misc
 *.db
 .DS_Store

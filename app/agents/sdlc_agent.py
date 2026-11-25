@@ -273,8 +273,10 @@ def approval_required(model: str) -> dict:
         "approvers": list(SDLC_APPROVERS),
         "status": "pending",
         "note": (f"Advisory only: adopting {model} must be approved by the project manager, architect, "
-                 "security team and compliance officer (problem statement section 14). Nothing in this "
-                 "system records that approval yet."),
+                 "security team and compliance officer (problem statement section 14). For a /agents/pipeline "
+                 "run each acceptance is recorded per role on the run's SDLC approval item "
+                 "(POST /runs/<run_id>/approvals); the selection becomes approved only when all four have "
+                 "accepted the same version."),
     }
 
 

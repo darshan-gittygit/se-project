@@ -229,3 +229,5 @@ def test_sdlc_endpoint_ranks_all_seven_with_percent_why_not_and_approvers(monkey
     assert models[0]["why_not"] is None and all(m["why_not"] for m in models[1:])
     assert d["approval_required"]["approvers"] == ["Project manager", "Architect", "Security team", "Compliance officer"]
     assert d["approval_required"]["status"] == "pending"
+    note = d["approval_required"]["note"]
+    assert "/runs/<run_id>/approvals" in note and "all four" in note and "Nothing in this system records" not in note

@@ -1,0 +1,367 @@
+{
+  "id": "fraud_detection",
+  "title": "Real-time transaction fraud detection",
+  "case_type": "fraud detection",
+  "scenario": "Head of Fraud Risk: We want a fraud detection system that scores every card and account-to-account transaction for fraud before it is completed. Today we rely on fixed rules written years ago and lose a lot of money. We are not sure which signals will work, so we expect to try several machine-learning models and compare them on historical data before choosing one. Data science lead: Models need two years of labelled transaction history, device information and customer behaviour data. We will retrain the models regularly as fraud patterns change. Fraud analysts: Transactions with a high fraud score should be held and sent to an analyst queue; analysts confirm or release them, and their decisions feed back into training. We want fewer false alarms than today. Customer experience: Scoring must add no more than 100 milliseconds to a payment, and genuine customers should rarely be blocked. When a transaction is held, the customer should get an SMS asking them to confirm it. Compliance officer: Suspicious activity has to be reported to the financial intelligence unit, and we must be able to explain why a transaction was blocked if a customer complains. Every model version, its training data and its decisions must be recorded. Security team: Customer data used for training must be pseudonymised, and only the data-science team may access the training data. CIO: The budget for this project is fixed for this year and the first version must go live within six months. Every model must also be fully validated by the model-risk team before it touches production, which takes about three months per model.",
+  "answers": [],
+  "documents": [],
+  "gold": {
+    "status": "DRAFT",
+    "labeller": "",
+    "notes": "kyc_aml covers suspicious-activity monitoring and reporting; no source covers model risk management.",
+    "requirements": [
+      {
+        "id": "G-1",
+        "statement": "Every transaction is scored for fraud before completion",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "score",
+            "scoring"
+          ],
+          [
+            "transaction",
+            "payment"
+          ]
+        ],
+        "expected_sources": [
+          "kyc_aml",
+          "payment_security"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-2",
+        "statement": "Several ML models are compared on historical data",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "model"
+          ],
+          [
+            "compar",
+            "evaluat",
+            "experiment",
+            "benchmark"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-3",
+        "statement": "Models use two years of labelled history, device and behaviour data",
+        "category": "Data-management",
+        "keyword_groups": [
+          [
+            "histor",
+            "two year",
+            "2 year"
+          ],
+          [
+            "transaction",
+            "label",
+            "data"
+          ]
+        ],
+        "expected_sources": [
+          "data_protection"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-4",
+        "statement": "Models are retrained regularly",
+        "category": "Operational and maintenance",
+        "keyword_groups": [
+          [
+            "retrain",
+            "re train",
+            "train"
+          ],
+          [
+            "model"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-5",
+        "statement": "High-score transactions are held and queued for analysts",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "hold",
+            "held",
+            "queue"
+          ],
+          [
+            "analyst",
+            "review"
+          ]
+        ],
+        "expected_sources": [
+          "kyc_aml"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-6",
+        "statement": "Analyst decisions feed back into training",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "analyst",
+            "feedback",
+            "label"
+          ],
+          [
+            "train",
+            "model"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-7",
+        "statement": "Scoring adds at most 100 milliseconds",
+        "category": "Performance",
+        "keyword_groups": [
+          [
+            "100",
+            "millisecond",
+            "latency"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-8",
+        "statement": "Customers get an SMS to confirm a held transaction",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "sms",
+            "text message",
+            "notif",
+            "alert"
+          ],
+          [
+            "confirm",
+            "held",
+            "hold"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-9",
+        "statement": "Suspicious activity is reported to the financial intelligence unit",
+        "category": "Regulatory",
+        "keyword_groups": [
+          [
+            "report"
+          ],
+          [
+            "suspicious",
+            "financial intelligence",
+            "fiu"
+          ]
+        ],
+        "expected_sources": [
+          "kyc_aml"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-10",
+        "statement": "The reason a transaction was blocked can be explained",
+        "category": "Regulatory",
+        "keyword_groups": [
+          [
+            "explain",
+            "reason"
+          ],
+          [
+            "block",
+            "held",
+            "declin",
+            "flag"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-11",
+        "statement": "Model versions, training data and decisions are recorded",
+        "category": "Audit and reporting",
+        "keyword_groups": [
+          [
+            "version",
+            "lineage",
+            "record",
+            "log"
+          ],
+          [
+            "model",
+            "training",
+            "decision"
+          ]
+        ],
+        "expected_sources": [
+          "kyc_aml"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-12",
+        "statement": "Training data is pseudonymised",
+        "category": "Privacy",
+        "keyword_groups": [
+          [
+            "pseudonym",
+            "anonym",
+            "mask"
+          ]
+        ],
+        "expected_sources": [
+          "data_protection"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-13",
+        "statement": "Only the data-science team can access training data",
+        "category": "Security",
+        "keyword_groups": [
+          [
+            "access"
+          ],
+          [
+            "data science",
+            "training data",
+            "restrict",
+            "role"
+          ]
+        ],
+        "expected_sources": [
+          "data_protection",
+          "general_security_baseline"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-14",
+        "statement": "First version goes live within six months on a fixed budget",
+        "category": "Business",
+        "keyword_groups": [
+          [
+            "six month",
+            "6 month",
+            "deadline",
+            "go live",
+            "budget"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-15",
+        "statement": "Every model is validated by the model-risk team before production",
+        "category": "Regulatory",
+        "keyword_groups": [
+          [
+            "validat",
+            "model risk"
+          ],
+          [
+            "production",
+            "deploy",
+            "before",
+            "live"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      }
+    ],
+    "ambiguities": [
+      {
+        "id": "A-1",
+        "phrase": "fewer false alarms than today",
+        "keywords": [
+          "false alarm",
+          "false positive"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "A-2",
+        "phrase": "genuine customers should rarely be blocked",
+        "keywords": [
+          "rarely"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "A-3",
+        "phrase": "retrain the models regularly",
+        "keywords": [
+          "regular",
+          "periodic"
+        ],
+        "status": "DRAFT"
+      }
+    ],
+    "conflicts": [
+      {
+        "id": "C-1",
+        "description": "Go live in six months, but several models must be compared and each validated for about three months",
+        "sides": [
+          [
+            "G-14"
+          ],
+          [
+            "G-15",
+            "G-2"
+          ]
+        ],
+        "keyword_groups": [
+          [
+            "six month",
+            "6 month",
+            "deadline",
+            "go live"
+          ],
+          [
+            "validat",
+            "three month",
+            "3 month"
+          ]
+        ],
+        "status": "DRAFT"
+      }
+    ],
+    "sdlc": {
+      "top": "Spiral",
+      "reason": "High uncertainty about which signals and models work; risk-driven iterations with experiments",
+      "acceptable": [
+        {
+          "model": "Agile",
+          "reason": "Experimentation and frequent retraining favour short iterations"
+        },
+        {
+          "model": "Incremental",
+          "reason": "Rules first, then models, delivered in increments"
+        }
+      ],
+      "status": "DRAFT"
+    }
+  }
+}

@@ -1,0 +1,406 @@
+{
+  "id": "loan_processing",
+  "title": "Digital personal-loan origination",
+  "case_type": "loan processing",
+  "scenario": "Head of Retail Lending: We are building a digital personal-loan journey for salaried customers. Applicants fill in an online form, upload their PAN card, address proof and last three salary slips, and should get a decision quickly. Loans up to five lakh rupees are decided automatically by our scoring model; larger loans go to a credit officer for manual review. Credit risk team: The score must use income, existing obligations and bureau history, and we need to be able to explain every decision. Interest rates depend on the applicant's score band. Compliance officer: Declined applicants must receive the specific reason for the decline, and every applicant must see the full interest rate, fees and repayment schedule before accepting the offer. We must verify identity and address and keep the verification records. The scoring model must be reviewed every year for unfair impact on any group of applicants. Customer experience lead: Every application, including the ones that go to a credit officer, must get a final decision within two minutes, so that customers are never left waiting. The form should be simple. Operations: Approved loans are disbursed to the customer's bank account through our existing core banking system. Credit officers need a work queue showing pending applications with the uploaded documents attached. IT security: Uploaded documents contain sensitive personal data and must be encrypted and visible only to credit staff. All decisions and manual overrides must be logged. Product owner: We may add more loan products in future, but the first release covers personal loans only.",
+  "answers": [],
+  "documents": [],
+  "gold": {
+    "status": "DRAFT",
+    "labeller": "",
+    "notes": "Flagship domain: kyc_aml and fair_lending apply directly.",
+    "requirements": [
+      {
+        "id": "G-1",
+        "statement": "Applicants apply through an online form",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "application",
+            "apply"
+          ],
+          [
+            "form",
+            "online"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-2",
+        "statement": "Applicants upload PAN card, address proof and salary slips",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "upload"
+          ],
+          [
+            "document",
+            "pan",
+            "salary",
+            "address proof",
+            "slip"
+          ]
+        ],
+        "expected_sources": [
+          "kyc_aml"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-3",
+        "statement": "Identity and address are verified and verification records kept",
+        "category": "Regulatory",
+        "keyword_groups": [
+          [
+            "verif"
+          ],
+          [
+            "identity",
+            "address",
+            "kyc"
+          ]
+        ],
+        "expected_sources": [
+          "kyc_aml"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-4",
+        "statement": "Loans up to five lakh are decided automatically by the scoring model",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "automat",
+            "auto"
+          ],
+          [
+            "decision",
+            "approv",
+            "decid",
+            "scor"
+          ]
+        ],
+        "expected_sources": [
+          "fair_lending"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-5",
+        "statement": "Loans above five lakh go to a credit officer for manual review",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "credit officer",
+            "manual",
+            "officer"
+          ],
+          [
+            "review",
+            "route",
+            "refer",
+            "assign",
+            "decid",
+            "approv"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-6",
+        "statement": "The score uses income, existing obligations and bureau history",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "score",
+            "scoring",
+            "assess"
+          ],
+          [
+            "income",
+            "obligation",
+            "bureau",
+            "repayment",
+            "credit history"
+          ]
+        ],
+        "expected_sources": [
+          "fair_lending"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-7",
+        "statement": "Every credit decision can be explained",
+        "category": "Regulatory",
+        "keyword_groups": [
+          [
+            "explain",
+            "reason"
+          ],
+          [
+            "decision",
+            "score"
+          ]
+        ],
+        "expected_sources": [
+          "fair_lending"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-8",
+        "statement": "Declined applicants receive the specific reason",
+        "category": "Regulatory",
+        "keyword_groups": [
+          [
+            "declin",
+            "reject"
+          ],
+          [
+            "reason"
+          ]
+        ],
+        "expected_sources": [
+          "fair_lending"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-9",
+        "statement": "Interest rate, fees and repayment schedule are disclosed before acceptance",
+        "category": "Regulatory",
+        "keyword_groups": [
+          [
+            "interest",
+            "fee",
+            "repayment",
+            "term"
+          ],
+          [
+            "disclos",
+            "show",
+            "display",
+            "before",
+            "present"
+          ]
+        ],
+        "expected_sources": [
+          "fair_lending"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-10",
+        "statement": "The scoring model is reviewed yearly for unfair impact",
+        "category": "Regulatory",
+        "keyword_groups": [
+          [
+            "review",
+            "audit",
+            "monitor"
+          ],
+          [
+            "fair",
+            "bias",
+            "disparate",
+            "impact",
+            "discriminat"
+          ]
+        ],
+        "expected_sources": [
+          "fair_lending"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-11",
+        "statement": "A final decision within two minutes for every application",
+        "category": "Performance",
+        "keyword_groups": [
+          [
+            "decision"
+          ],
+          [
+            "2 minute",
+            "two minute",
+            "minute"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-12",
+        "statement": "Approved loans are disbursed through the core banking system",
+        "category": "Integration",
+        "keyword_groups": [
+          [
+            "disburs",
+            "pay out",
+            "transfer"
+          ],
+          [
+            "core banking",
+            "account",
+            "bank"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-13",
+        "statement": "Credit officers have a work queue of pending applications with documents",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "queue",
+            "worklist",
+            "work list",
+            "dashboard"
+          ],
+          [
+            "pending",
+            "application",
+            "officer"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-14",
+        "statement": "Uploaded documents are encrypted and visible only to credit staff",
+        "category": "Security",
+        "keyword_groups": [
+          [
+            "encrypt",
+            "access",
+            "restrict",
+            "visible"
+          ],
+          [
+            "document",
+            "upload"
+          ]
+        ],
+        "expected_sources": [
+          "data_protection",
+          "general_security_baseline"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-15",
+        "statement": "All decisions and manual overrides are logged",
+        "category": "Audit and reporting",
+        "keyword_groups": [
+          [
+            "log",
+            "audit",
+            "record",
+            "trail"
+          ],
+          [
+            "decision",
+            "override"
+          ]
+        ],
+        "expected_sources": [
+          "kyc_aml",
+          "general_security_baseline"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-16",
+        "statement": "Interest rate depends on the score band",
+        "category": "Business",
+        "keyword_groups": [
+          [
+            "interest",
+            "rate",
+            "pric"
+          ],
+          [
+            "score",
+            "band"
+          ]
+        ],
+        "expected_sources": [
+          "fair_lending"
+        ],
+        "status": "DRAFT"
+      }
+    ],
+    "ambiguities": [
+      {
+        "id": "A-1",
+        "phrase": "should get a decision quickly",
+        "keywords": [
+          "quick",
+          "fast",
+          "prompt"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "A-2",
+        "phrase": "the form should be simple",
+        "keywords": [
+          "simple",
+          "easy",
+          "user friendly"
+        ],
+        "status": "DRAFT"
+      }
+    ],
+    "conflicts": [
+      {
+        "id": "C-1",
+        "description": "Larger loans need manual credit-officer review, yet every application must be decided within two minutes",
+        "sides": [
+          [
+            "G-5"
+          ],
+          [
+            "G-11"
+          ]
+        ],
+        "keyword_groups": [
+          [
+            "credit officer",
+            "manual",
+            "officer"
+          ],
+          [
+            "2 minute",
+            "two minute",
+            "minute"
+          ]
+        ],
+        "status": "DRAFT"
+      }
+    ],
+    "sdlc": {
+      "top": "V-Model",
+      "reason": "Stable, regulated requirements with explainability and audit duties need test levels planned per phase",
+      "acceptable": [
+        {
+          "model": "Waterfall",
+          "reason": "Requirements are clear and stable for the first release"
+        },
+        {
+          "model": "Agile-V",
+          "reason": "Regulated with possible later loan products added in iterations"
+        }
+      ],
+      "status": "DRAFT"
+    }
+  }
+}

@@ -1,0 +1,425 @@
+{
+  "id": "digital_banking",
+  "title": "Retail mobile banking app",
+  "case_type": "digital banking",
+  "scenario": "Head of Digital Channels: We want to replace our ageing mobile banking app with a new one for about two million retail customers. Customers must be able to view balances and statements, transfer money to saved payees and pay utility bills. The app should be fast and user-friendly. We ship a new feature every two weeks today and want to keep that pace. Information-security lead: Every login needs multi-factor authentication, and adding a new payee must be confirmed with a one-time password. Sessions should time out after five minutes of inactivity. We want penetration tests before every release. Compliance officer: New customers can open an account inside the app, so identity verification must follow our KYC rules, and we must keep records of every verification. Customer data must stay in India and must only be used for the purposes the customer agreed to. Operations manager: The app must be available around the clock; planned downtime is only allowed on Sunday nights. Our core banking system is twenty years old and only exposes a batch file interface that runs overnight, but balances shown in the app must always be real-time. Product owner: Marketing wants to show personalised offers in the app based on each customer's full transaction history, and every screen should work for customers with visual impairments. Customers should be able to freeze a lost debit card instantly from the app. Risk team: Transfers above a reasonable limit should need extra checks before the money leaves the account.",
+  "answers": [],
+  "documents": [],
+  "gold": {
+    "status": "DRAFT",
+    "labeller": "",
+    "notes": "KB covers this domain through kyc_aml, payment_security, data_protection and the generic baseline.",
+    "requirements": [
+      {
+        "id": "G-1",
+        "statement": "Customers can view balances and statements",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "balance",
+            "statement"
+          ],
+          [
+            "view",
+            "display",
+            "show",
+            "see",
+            "access",
+            "check"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-2",
+        "statement": "Customers can transfer money to saved payees",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "transfer",
+            "send"
+          ],
+          [
+            "payee",
+            "beneficiar"
+          ]
+        ],
+        "expected_sources": [
+          "payment_security"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-3",
+        "statement": "Customers can pay utility bills",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "bill"
+          ],
+          [
+            "pay"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-4",
+        "statement": "Multi-factor authentication at every login",
+        "category": "Security",
+        "keyword_groups": [
+          [
+            "multi factor",
+            "multifactor",
+            "two factor",
+            "2fa",
+            "mfa",
+            "one time",
+            "otp"
+          ],
+          [
+            "login",
+            "log in",
+            "sign in",
+            "authenticat"
+          ]
+        ],
+        "expected_sources": [
+          "general_security_baseline"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-5",
+        "statement": "Adding a payee is confirmed with a one-time password",
+        "category": "Security",
+        "keyword_groups": [
+          [
+            "payee",
+            "beneficiar"
+          ],
+          [
+            "one time",
+            "otp",
+            "confirm",
+            "verif"
+          ]
+        ],
+        "expected_sources": [
+          "general_security_baseline"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-6",
+        "statement": "Sessions time out after five minutes of inactivity",
+        "category": "Security",
+        "keyword_groups": [
+          [
+            "session",
+            "inactiv",
+            "idle"
+          ],
+          [
+            "time out",
+            "timeout",
+            "expire",
+            "log out",
+            "logout",
+            "5 minute",
+            "five minute"
+          ]
+        ],
+        "expected_sources": [
+          "general_security_baseline"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-7",
+        "statement": "In-app account opening verifies identity under KYC rules and keeps verification records",
+        "category": "Regulatory",
+        "keyword_groups": [
+          [
+            "identity",
+            "kyc"
+          ],
+          [
+            "verif"
+          ]
+        ],
+        "expected_sources": [
+          "kyc_aml"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-8",
+        "statement": "Customer data is stored in India",
+        "category": "Privacy",
+        "keyword_groups": [
+          [
+            "india",
+            "residen",
+            "locali",
+            "within the country"
+          ],
+          [
+            "data",
+            "store",
+            "host"
+          ]
+        ],
+        "expected_sources": [
+          "data_protection"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-9",
+        "statement": "Personal data is used only for purposes the customer consented to",
+        "category": "Privacy",
+        "keyword_groups": [
+          [
+            "consent",
+            "agreed",
+            "purpose"
+          ],
+          [
+            "data",
+            "personal"
+          ]
+        ],
+        "expected_sources": [
+          "data_protection"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-10",
+        "statement": "Available 24x7; planned downtime only on Sunday nights",
+        "category": "Availability and reliability",
+        "keyword_groups": [
+          [
+            "availab",
+            "uptime",
+            "24",
+            "around the clock",
+            "downtime"
+          ]
+        ],
+        "expected_sources": [
+          "general_security_baseline"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-11",
+        "statement": "Integrates with the legacy core banking system",
+        "category": "Integration",
+        "keyword_groups": [
+          [
+            "core banking",
+            "core system",
+            "legacy"
+          ],
+          [
+            "integrat",
+            "interface",
+            "batch",
+            "connect",
+            "sync"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-12",
+        "statement": "Screens are accessible to visually impaired customers",
+        "category": "Usability",
+        "keyword_groups": [
+          [
+            "accessib",
+            "visual",
+            "screen reader",
+            "wcag",
+            "impair"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-13",
+        "statement": "Customers can freeze a lost debit card instantly",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "card"
+          ],
+          [
+            "freeze",
+            "block",
+            "lock",
+            "disable"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-14",
+        "statement": "Personalised offers based on transaction history",
+        "category": "Business",
+        "keyword_groups": [
+          [
+            "offer",
+            "recommend",
+            "personalis",
+            "personaliz"
+          ],
+          [
+            "transaction",
+            "history",
+            "spending"
+          ]
+        ],
+        "expected_sources": [
+          "data_protection"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-15",
+        "statement": "Transfers above a limit need extra checks",
+        "category": "Security",
+        "keyword_groups": [
+          [
+            "transfer",
+            "transaction"
+          ],
+          [
+            "limit",
+            "threshold",
+            "above",
+            "high value",
+            "large"
+          ]
+        ],
+        "expected_sources": [
+          "kyc_aml"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-16",
+        "statement": "Penetration test before every release",
+        "category": "Security",
+        "keyword_groups": [
+          [
+            "penetration",
+            "pen test",
+            "security test"
+          ]
+        ],
+        "expected_sources": [
+          "general_security_baseline"
+        ],
+        "status": "DRAFT"
+      }
+    ],
+    "ambiguities": [
+      {
+        "id": "A-1",
+        "phrase": "fast and user-friendly",
+        "keywords": [
+          "fast",
+          "quick",
+          "user friendly",
+          "easy"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "A-2",
+        "phrase": "a reasonable limit",
+        "keywords": [
+          "reasonable",
+          "limit"
+        ],
+        "status": "DRAFT"
+      }
+    ],
+    "conflicts": [
+      {
+        "id": "C-1",
+        "description": "Balances must always be real-time, but the core banking system only offers an overnight batch interface",
+        "sides": [
+          [
+            "G-1"
+          ],
+          [
+            "G-11"
+          ]
+        ],
+        "keyword_groups": [
+          [
+            "real time",
+            "realtime",
+            "instant"
+          ],
+          [
+            "batch",
+            "overnight",
+            "nightly"
+          ]
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "C-2",
+        "description": "Personalised offers from full transaction history versus using data only for the purposes the customer agreed to",
+        "sides": [
+          [
+            "G-14"
+          ],
+          [
+            "G-9"
+          ]
+        ],
+        "keyword_groups": [
+          [
+            "offer",
+            "personalis",
+            "personaliz",
+            "marketing"
+          ],
+          [
+            "consent",
+            "purpose",
+            "agreed"
+          ]
+        ],
+        "status": "DRAFT"
+      }
+    ],
+    "sdlc": {
+      "top": "DevSecOps",
+      "reason": "Two-week releases with security gates (MFA, OTP, penetration tests) every release",
+      "acceptable": [
+        {
+          "model": "Agile",
+          "reason": "Frequent releases and evolving features, though it weighs security lower"
+        },
+        {
+          "model": "Agile-V",
+          "reason": "Iterative delivery with formal verification suits a regulated bank"
+        }
+      ],
+      "status": "DRAFT"
+    }
+  }
+}

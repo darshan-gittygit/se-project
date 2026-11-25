@@ -1,0 +1,427 @@
+{
+  "id": "payment_systems",
+  "title": "Online merchant payment gateway",
+  "case_type": "payment systems",
+  "scenario": "Head of Payments: We are building a payment gateway that lets online merchants accept card and UPI payments through a hosted checkout page and an API. Payments must be authorised in real time, and the gateway must handle our festival-season peaks without problems. Security lead: We never want raw card numbers in our own database; cards must be tokenised through a certified vault. All payment traffic must use TLS, and card verification codes must never be stored. Repeated failed payment attempts from the same card or device should be blocked. Merchant success manager: Merchants want our gateway to save each customer's full card details for one-click repeat purchases, and they need daily settlement reports and the ability to issue refunds from a merchant dashboard. Compliance officer: Every transaction must be logged so that it can be audited, and suspicious patterns such as many small payments just under a reporting limit must be flagged for review. Merchant onboarding needs KYC of the business and of its directors. Operations: The gateway must be highly available. Settlements are paid into merchant bank accounts every day at 6 pm. Engineering manager: We deploy several times a day, and every change has to pass automated security scanning in the delivery pipeline before it reaches production. Finance: Our fee is a percentage of each transaction, with lower rates for high-volume merchants, and every customer must receive a payment receipt.",
+  "answers": [],
+  "documents": [],
+  "gold": {
+    "status": "DRAFT",
+    "labeller": "",
+    "notes": "payment_security and kyc_aml apply directly.",
+    "requirements": [
+      {
+        "id": "G-1",
+        "statement": "Hosted checkout page and API for card and UPI payments",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "checkout",
+            "api"
+          ],
+          [
+            "card",
+            "upi",
+            "payment"
+          ]
+        ],
+        "expected_sources": [
+          "payment_security"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-2",
+        "statement": "Payments are authorised in real time",
+        "category": "Performance",
+        "keyword_groups": [
+          [
+            "authori"
+          ],
+          [
+            "real time",
+            "realtime",
+            "second",
+            "instant"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-3",
+        "statement": "Cards are tokenised through a certified vault; no raw card numbers stored",
+        "category": "Security",
+        "keyword_groups": [
+          [
+            "token",
+            "vault"
+          ],
+          [
+            "card"
+          ]
+        ],
+        "expected_sources": [
+          "payment_security"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-4",
+        "statement": "All payment traffic uses TLS",
+        "category": "Security",
+        "keyword_groups": [
+          [
+            "tls",
+            "encrypt",
+            "secure"
+          ],
+          [
+            "traffic",
+            "transmission",
+            "transit",
+            "communication"
+          ]
+        ],
+        "expected_sources": [
+          "payment_security"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-5",
+        "statement": "Card verification codes are never stored",
+        "category": "Security",
+        "keyword_groups": [
+          [
+            "cvv",
+            "cvc",
+            "verification code",
+            "security code"
+          ],
+          [
+            "stor",
+            "retain",
+            "kept"
+          ]
+        ],
+        "expected_sources": [
+          "payment_security"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-6",
+        "statement": "Repeated failed payment attempts are blocked",
+        "category": "Security",
+        "keyword_groups": [
+          [
+            "fail"
+          ],
+          [
+            "block",
+            "limit",
+            "flag",
+            "lock"
+          ]
+        ],
+        "expected_sources": [
+          "payment_security"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-7",
+        "statement": "Merchants get daily settlement reports",
+        "category": "Audit and reporting",
+        "keyword_groups": [
+          [
+            "settlement"
+          ],
+          [
+            "report"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-8",
+        "statement": "Merchants can issue refunds from the dashboard",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "refund"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-9",
+        "statement": "Every transaction is logged for audit",
+        "category": "Audit and reporting",
+        "keyword_groups": [
+          [
+            "log",
+            "audit",
+            "trail",
+            "record"
+          ],
+          [
+            "transaction",
+            "payment"
+          ]
+        ],
+        "expected_sources": [
+          "payment_security",
+          "kyc_aml"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-10",
+        "statement": "Suspicious patterns such as structuring are flagged for review",
+        "category": "Regulatory",
+        "keyword_groups": [
+          [
+            "suspicious",
+            "structur",
+            "pattern",
+            "monitor",
+            "fraud"
+          ],
+          [
+            "flag",
+            "review",
+            "alert",
+            "report"
+          ]
+        ],
+        "expected_sources": [
+          "kyc_aml",
+          "payment_security"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-11",
+        "statement": "Merchant onboarding includes KYC of the business and its directors",
+        "category": "Regulatory",
+        "keyword_groups": [
+          [
+            "kyc",
+            "verif",
+            "onboard"
+          ],
+          [
+            "merchant",
+            "director",
+            "business"
+          ]
+        ],
+        "expected_sources": [
+          "kyc_aml"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-12",
+        "statement": "The gateway is highly available",
+        "category": "Availability and reliability",
+        "keyword_groups": [
+          [
+            "availab",
+            "uptime",
+            "downtime",
+            "failover"
+          ]
+        ],
+        "expected_sources": [
+          "general_security_baseline"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-13",
+        "statement": "Settlements are paid to merchant bank accounts daily at 6 pm",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "settle"
+          ],
+          [
+            "daily",
+            "6 pm",
+            "every day",
+            "bank account"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-14",
+        "statement": "Every change passes automated security scanning in the pipeline",
+        "category": "Security",
+        "keyword_groups": [
+          [
+            "scan",
+            "security test",
+            "sast",
+            "dast"
+          ],
+          [
+            "pipeline",
+            "deploy",
+            "build",
+            "automat"
+          ]
+        ],
+        "expected_sources": [
+          "general_security_baseline"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-15",
+        "statement": "Fees are a percentage of each transaction with volume tiers",
+        "category": "Business",
+        "keyword_groups": [
+          [
+            "fee",
+            "rate",
+            "pricing",
+            "commission"
+          ],
+          [
+            "percent",
+            "volume",
+            "tier"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-16",
+        "statement": "Customers receive a payment receipt",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "receipt",
+            "confirmation"
+          ]
+        ],
+        "expected_sources": [
+          "payment_security"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-17",
+        "statement": "The gateway handles festival-season peak load",
+        "category": "Performance",
+        "keyword_groups": [
+          [
+            "peak",
+            "festival",
+            "load",
+            "scal",
+            "throughput"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-18",
+        "statement": "Saved card details for one-click repeat purchases",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "one click",
+            "repeat purchase",
+            "saved card",
+            "save",
+            "stored card"
+          ],
+          [
+            "card"
+          ]
+        ],
+        "expected_sources": [
+          "payment_security"
+        ],
+        "status": "DRAFT"
+      }
+    ],
+    "ambiguities": [
+      {
+        "id": "A-1",
+        "phrase": "handle peaks without problems",
+        "keywords": [
+          "problem",
+          "peak",
+          "festival"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "A-2",
+        "phrase": "highly available",
+        "keywords": [
+          "highly available",
+          "high availab",
+          "availab"
+        ],
+        "status": "DRAFT"
+      }
+    ],
+    "conflicts": [
+      {
+        "id": "C-1",
+        "description": "Merchants want full card details saved, but raw card numbers must never be stored (tokenisation)",
+        "sides": [
+          [
+            "G-18"
+          ],
+          [
+            "G-3",
+            "G-5"
+          ]
+        ],
+        "keyword_groups": [
+          [
+            "save",
+            "store",
+            "one click",
+            "repeat"
+          ],
+          [
+            "token",
+            "raw card",
+            "card number",
+            "vault"
+          ]
+        ],
+        "status": "DRAFT"
+      }
+    ],
+    "sdlc": {
+      "top": "DevSecOps",
+      "reason": "Several deployments a day with automated security scanning on a high-risk payment system",
+      "acceptable": [
+        {
+          "model": "Agile-V",
+          "reason": "Iterative delivery with formal verification for a regulated payment system"
+        },
+        {
+          "model": "Incremental",
+          "reason": "Card and UPI rails can be delivered as separate increments"
+        }
+      ],
+      "status": "DRAFT"
+    }
+  }
+}

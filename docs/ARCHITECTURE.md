@@ -323,6 +323,29 @@ Whatever the LLM sends for the code-set fields is overwritten, so it cannot appr
 - **duplicate** (rule): `difflib` similarity of at least 0.92 after removing "the system shall". 0.90 wrongly paired "encrypt payment data" with "encrypt user data".
 - **conflict** (one LLM call, schema-checked): requirements that cannot all be met as written; at least two known ids; an empty list is a valid answer. Skipped when there are fewer than two requirements.
 
+## Evaluation harness (problem statement section 19)
+
+```mermaid
+flowchart LR
+    K[eval/cases/*.json<br/>scenario + gold, FROZEN] --> RE[scripts/run_eval.py<br/>/agents/pipeline in-process]
+    RE --> RS[eval/results/date/case.json<br/>result + time + models + gold hash]
+    RS --> EV[scripts/evaluate.py<br/>metrics]
+    DB[(data/app.db decisions)] -. human corrections .-> EV
+    MB[eval/manual_baseline/*.md] --> EH[scripts/eval_human.py]
+    SF[eval/satisfaction/*.csv] --> EH
+    EV --> RP[scripts/eval_report.py]
+    EH --> RP
+    RP --> DOC[docs/EVALUATION.md]
+```
+
+**Gold.** Each case file holds a scenario (stakeholder voice, 2-3 planted vague phrases, 1-2 planted conflicts) and a gold section: expected requirements (statement, category, keyword groups, expected knowledge-base sources), the planted ambiguities (keywords) and conflicts (the gold requirements on each side, plus keyword groups), and the expected SDLC model with acceptable alternatives. Every gold field carries `"status": "DRAFT"` until the author has reviewed it and set it to `FROZEN`; the runner and the metrics refuse anything else, and each result stores a hash of the gold so later edits show up in the report. `run_eval --check` also self-checks the gold: each statement must match its own keyword groups, sources must exist in `knowledge_base/`, conflict sides must name real gold ids; overlaps between keyword groups are listed for review.
+
+**Runner.** Calls `/agents/pipeline` in-process through FastAPI's test client with the real app (no server), one case at a time with a pause (default 20 s), and writes each result atomically as soon as it finishes; a failure writes `<case>.error.json`. After `--max-429` rate-limit failures in a row it stops; `--resume` skips saved cases. `--offline` patches the model calls for the duration of each request with replies built from the case's gold (and empty retrieval) and uses a throwaway database: it tests the harness, and since the replies restate the gold, its extraction scores are a self-consistency check of the keyword groups.
+
+**Metrics.** `scripts/evaluate.py` (definitions in its docstring and in `docs/EVALUATION.md`): extraction precision/recall/F1 via a maximum one-to-one matching on keyword groups; completeness as gold-category coverage (plus category agreement and record-field completeness); ambiguity- and conflict-detection rates over the planted items; regulatory-control coverage over expected (requirement, source) pairs; hallucination rate (quote not in the masked input, or neither quote nor assumption); citation correctness (evidence found in the cited source's text and source expected by the gold); SDLC top-1/top-3/acceptable; human correction rate ((modify + reject) / review decisions, read-only from the app database); traceability coverage (backward, forward and verification links); processing time. Ratios with no denominator are reported as n/a, never as 0 or 1.
+
+**Human inputs.** The manual baseline (`eval/manual_baseline/<case>.md`, from `TEMPLATE.md`) is scored against the same gold with the same matching, and its time is compared with the system's processing time plus the analyst's review time. Satisfaction answers (five Likert questions, `eval/satisfaction_form.md`) are aggregated per question from CSV files.
+
 ## Known limitations
 
 - The compliance knowledge base is a small, curated set of paraphrased regulatory principles (31 chunks, 6 documents), not verbatim legal text. Cite it as a "curated compliance knowledge base".
@@ -338,6 +361,7 @@ Whatever the LLM sends for the code-set fields is overwritten, so it cannot appr
 - The six new traits have not been extracted live yet (quota); their reference values are hand ratings.
 - Generated stories, use cases, workflows, data and interface requirements are checked for structure and links only; they are listed as an open issue until someone reviews them. The SRS download store is in memory (last 20 runs).
 - A full pipeline run is now 8 LLM calls, which uses the free-tier quota quickly (`?artefacts=false` saves one).
+- The evaluation uses six synthetic case studies, gold written by one person (who also writes the manual baseline), keyword matching as a stand-in for human judgement, and recall-only detection rates over planted problems; see `docs/EVALUATION.md` (Limitations).
 - The web UI is checked by static tests (files served, sample keys, constants, `node --check`) and a manual browser pass; there are no automated browser tests, and the pipeline shows elapsed time rather than stage progress.
 - Masking is pattern-based (no names or addresses), and the injection filter is a narrow pattern list.
 - The role header is trusted as sent, and the same role may modify and then approve an item; both need real authentication and a separation-of-duties rule. The audit log stores stage outputs, which can contain personal data, and the retention purge cannot remove them (see Retention). SQLite suits a single server process.

@@ -1,0 +1,402 @@
+{
+  "id": "regulatory_reporting",
+  "title": "Monthly regulatory return (XBRL)",
+  "case_type": "regulatory reporting",
+  "scenario": "Head of Regulatory Reporting: The central bank has published a new monthly return on large exposures and liquidity that every bank must file from 1 April next year. The format and validation rules are fixed in the regulator's published taxonomy, and late or wrong filings carry penalties. We want a system that pulls data from our general ledger, loan book and treasury systems, calculates the figures, validates them against the regulator's rules and produces the XBRL file that we upload to the regulator's portal. Finance controller: Every figure must reconcile to the general ledger, and differences above a small tolerance must be explained before sign-off. The CFO signs each return before it is filed. Data owners: Source data arrives in different formats, and some loan records have missing counterparty identifiers; the system should handle this sensibly. Internal audit: We need a complete audit trail from each reported number back to the source records, and every manual adjustment must record who made it, when and why. Filed returns and their working papers must be kept for ten years. IT: The current spreadsheet process takes about ten working days; the new system must produce the draft return within one working day. The calculation engine should be easy to change when the regulator revises the rules, but the returns team has also asked us to freeze the scope now so that we meet the April deadline, with no changes accepted after design sign-off. Information security: Only the reporting team may run or adjust returns, with separate maker and checker roles. Treasury: Liquidity figures must use end-of-day positions from the treasury system.",
+  "answers": [],
+  "documents": [],
+  "gold": {
+    "status": "DRAFT",
+    "labeller": "",
+    "notes": "No regulatory-reporting source in the KB: only the generic baseline (audit logs, access control) applies; the system should say the KB does not cover this domain well.",
+    "requirements": [
+      {
+        "id": "G-1",
+        "statement": "Data is extracted from the general ledger, loan book and treasury systems",
+        "category": "Integration",
+        "keyword_groups": [
+          [
+            "general ledger",
+            "ledger",
+            "loan book",
+            "treasury",
+            "source system"
+          ],
+          [
+            "extract",
+            "pull",
+            "ingest",
+            "import",
+            "integrat"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-2",
+        "statement": "The return figures are calculated",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "calculat",
+            "compute"
+          ],
+          [
+            "exposure",
+            "liquidity",
+            "return",
+            "figure"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-3",
+        "statement": "Figures are validated against the regulator's rules",
+        "category": "Regulatory",
+        "keyword_groups": [
+          [
+            "validat"
+          ],
+          [
+            "rule",
+            "taxonomy",
+            "regulator"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-4",
+        "statement": "An XBRL file is produced for the regulator's portal",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "xbrl"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-5",
+        "statement": "The return is filed monthly from 1 April",
+        "category": "Regulatory",
+        "keyword_groups": [
+          [
+            "monthly",
+            "april",
+            "deadline"
+          ],
+          [
+            "file",
+            "filing",
+            "submit",
+            "return"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-6",
+        "statement": "Figures reconcile to the general ledger; differences above tolerance are explained",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "reconcil"
+          ],
+          [
+            "ledger",
+            "tolerance",
+            "difference"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-7",
+        "statement": "The CFO signs off each return before filing",
+        "category": "Regulatory",
+        "keyword_groups": [
+          [
+            "sign off",
+            "signoff",
+            "approv",
+            "cfo"
+          ],
+          [
+            "return",
+            "filing",
+            "before"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-8",
+        "statement": "Missing counterparty identifiers and format differences are handled",
+        "category": "Data-management",
+        "keyword_groups": [
+          [
+            "missing",
+            "incomplete",
+            "data quality",
+            "exception",
+            "invalid"
+          ],
+          [
+            "counterparty",
+            "identifier",
+            "record",
+            "data"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-9",
+        "statement": "Audit trail from each reported number to its source records",
+        "category": "Audit and reporting",
+        "keyword_groups": [
+          [
+            "audit trail",
+            "lineage",
+            "trace",
+            "drill"
+          ],
+          [
+            "source",
+            "record",
+            "number",
+            "figure"
+          ]
+        ],
+        "expected_sources": [
+          "general_security_baseline"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-10",
+        "statement": "Manual adjustments record who, when and why",
+        "category": "Audit and reporting",
+        "keyword_groups": [
+          [
+            "adjust",
+            "override"
+          ],
+          [
+            "log",
+            "record",
+            "who",
+            "reason",
+            "audit"
+          ]
+        ],
+        "expected_sources": [
+          "general_security_baseline"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-11",
+        "statement": "Returns and working papers are kept for ten years",
+        "category": "Data-management",
+        "keyword_groups": [
+          [
+            "retain",
+            "retention",
+            "kept",
+            "keep",
+            "archiv",
+            "stor"
+          ],
+          [
+            "10 year",
+            "ten year"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-12",
+        "statement": "The draft return is produced within one working day",
+        "category": "Performance",
+        "keyword_groups": [
+          [
+            "day",
+            "hour"
+          ],
+          [
+            "draft",
+            "return",
+            "produc",
+            "generat"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-13",
+        "statement": "Calculation rules can be changed when the regulator revises them",
+        "category": "Operational and maintenance",
+        "keyword_groups": [
+          [
+            "configur",
+            "rule",
+            "parameter",
+            "change"
+          ],
+          [
+            "calculat",
+            "engine",
+            "regulator",
+            "revis"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-14",
+        "statement": "Only the reporting team runs or adjusts returns, with maker and checker roles",
+        "category": "Security",
+        "keyword_groups": [
+          [
+            "maker",
+            "checker",
+            "segregat",
+            "separation",
+            "four eye"
+          ],
+          [
+            "role",
+            "adjust",
+            "approv",
+            "duty"
+          ]
+        ],
+        "expected_sources": [
+          "general_security_baseline"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-15",
+        "statement": "Liquidity figures use end-of-day treasury positions",
+        "category": "Data-management",
+        "keyword_groups": [
+          [
+            "end of day",
+            "eod",
+            "closing"
+          ],
+          [
+            "position",
+            "treasury",
+            "liquidity"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-16",
+        "statement": "Scope is frozen at design sign-off",
+        "category": "Business",
+        "keyword_groups": [
+          [
+            "freeze",
+            "frozen",
+            "no change",
+            "change control",
+            "baseline"
+          ],
+          [
+            "scope",
+            "requirement",
+            "design"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      }
+    ],
+    "ambiguities": [
+      {
+        "id": "A-1",
+        "phrase": "a small tolerance",
+        "keywords": [
+          "tolerance",
+          "small"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "A-2",
+        "phrase": "handle this sensibly",
+        "keywords": [
+          "sensibl",
+          "handle"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "A-3",
+        "phrase": "easy to change",
+        "keywords": [
+          "easy",
+          "easily"
+        ],
+        "status": "DRAFT"
+      }
+    ],
+    "conflicts": [
+      {
+        "id": "C-1",
+        "description": "The calculation engine must be easy to change for rule revisions, but scope is frozen with no changes after design sign-off",
+        "sides": [
+          [
+            "G-13"
+          ],
+          [
+            "G-16"
+          ]
+        ],
+        "keyword_groups": [
+          [
+            "change",
+            "revis",
+            "configur"
+          ],
+          [
+            "freeze",
+            "frozen",
+            "no change"
+          ]
+        ],
+        "status": "DRAFT"
+      }
+    ],
+    "sdlc": {
+      "top": "Waterfall",
+      "reason": "Fixed format, fixed deadline and stable requirements defined by the regulator's taxonomy",
+      "acceptable": [
+        {
+          "model": "V-Model",
+          "reason": "Heavy validation and reconciliation suit test levels planned against each phase"
+        }
+      ],
+      "status": "DRAFT"
+    }
+  }
+}

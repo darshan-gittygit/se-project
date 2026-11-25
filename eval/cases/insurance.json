@@ -1,0 +1,428 @@
+{
+  "id": "insurance",
+  "title": "Digital motor insurance claims",
+  "case_type": "insurance",
+  "scenario": "Claims director: We want to replace our paper-heavy motor insurance claims process with a digital claims platform. Policyholders should be able to report an accident from their phone, upload photos of the damage and the police report, and follow the status of their claim. Simple claims should be settled very quickly. Surveyor manager: Our surveyors inspect vehicles at partner garages and need to record their assessment and repair estimate in the platform from a tablet, even where the network is poor. Fraud and investigations team: Claims with warning signs, such as a policy bought a few days before the accident or repeated claims on the same vehicle, should be flagged for investigation before any payment is made. Finance: Approved claims are paid directly to the garage or to the policyholder's bank account; payments above two lakh rupees need a second approval. IT architect: Policy data stays in our fifteen-year-old policy administration system, which we cannot replace for at least three years. We plan to deliver the platform in stages, starting with motor claims and adding health and travel claims later. Compliance officer: Health and personal data in claims must be protected and used only for handling the claim. Claim documents must be kept for eight years. The insurance regulator expects every claim to be acknowledged within one working day of being reported. Customer service head: Policyholders want to talk to a person when they need to, and all communication should be in their preferred language. Data team: Management wants all claims data kept indefinitely so that it can be used for analytics.",
+  "answers": [],
+  "documents": [],
+  "gold": {
+    "status": "DRAFT",
+    "labeller": "",
+    "notes": "No insurance-specific source in the KB: only data_protection and the generic baseline apply; the system should say the KB does not cover this domain well.",
+    "requirements": [
+      {
+        "id": "G-1",
+        "statement": "Policyholders report an accident from their phone",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "report",
+            "register",
+            "submit",
+            "lodge",
+            "file",
+            "intimat"
+          ],
+          [
+            "claim",
+            "accident"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-2",
+        "statement": "Policyholders upload damage photos and the police report",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "upload",
+            "attach"
+          ],
+          [
+            "photo",
+            "image",
+            "police",
+            "document"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-3",
+        "statement": "Policyholders track claim status",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "status",
+            "track",
+            "progress"
+          ],
+          [
+            "claim"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-4",
+        "statement": "Simple claims are settled quickly",
+        "category": "Business",
+        "keyword_groups": [
+          [
+            "settle",
+            "approv"
+          ],
+          [
+            "simple",
+            "straight through",
+            "automat",
+            "quick",
+            "fast"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-5",
+        "statement": "Surveyors record assessment and repair estimate on a tablet",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "surveyor",
+            "assess",
+            "inspect"
+          ],
+          [
+            "estimate",
+            "assessment",
+            "record"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-6",
+        "statement": "Surveyor app works with poor or no network",
+        "category": "Availability and reliability",
+        "keyword_groups": [
+          [
+            "offline",
+            "poor network",
+            "connectivity",
+            "sync",
+            "low bandwidth",
+            "network"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-7",
+        "statement": "Suspicious claims are flagged for investigation before payment",
+        "category": "Security",
+        "keyword_groups": [
+          [
+            "fraud",
+            "suspicious",
+            "warning",
+            "red flag",
+            "investigat"
+          ],
+          [
+            "flag",
+            "refer",
+            "hold",
+            "review"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-8",
+        "statement": "Approved claims are paid to the garage or the policyholder's bank account",
+        "category": "Functional",
+        "keyword_groups": [
+          [
+            "pay",
+            "paid",
+            "settle",
+            "disburs"
+          ],
+          [
+            "garage",
+            "bank account",
+            "policyholder"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-9",
+        "statement": "Payments above two lakh need a second approval",
+        "category": "Security",
+        "keyword_groups": [
+          [
+            "second",
+            "dual",
+            "two level",
+            "maker checker",
+            "additional"
+          ],
+          [
+            "approv",
+            "authoris",
+            "authoriz",
+            "sign off"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-10",
+        "statement": "Integrates with the legacy policy administration system",
+        "category": "Integration",
+        "keyword_groups": [
+          [
+            "policy admin",
+            "policy system",
+            "legacy"
+          ],
+          [
+            "integrat",
+            "interface",
+            "connect",
+            "fetch",
+            "retriev"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-11",
+        "statement": "Health and personal data is protected and used only for the claim",
+        "category": "Privacy",
+        "keyword_groups": [
+          [
+            "health",
+            "personal",
+            "sensitive"
+          ],
+          [
+            "protect",
+            "encrypt",
+            "access",
+            "purpose",
+            "only"
+          ]
+        ],
+        "expected_sources": [
+          "data_protection",
+          "general_security_baseline"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-12",
+        "statement": "Claim documents are kept for eight years",
+        "category": "Data-management",
+        "keyword_groups": [
+          [
+            "retain",
+            "retention",
+            "kept",
+            "keep",
+            "stor"
+          ],
+          [
+            "8 year",
+            "eight year"
+          ]
+        ],
+        "expected_sources": [
+          "data_protection"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-13",
+        "statement": "Claims are acknowledged within one working day",
+        "category": "Regulatory",
+        "keyword_groups": [
+          [
+            "acknowledg"
+          ],
+          [
+            "working day",
+            "one day",
+            "1 day",
+            "24 hour"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-14",
+        "statement": "Policyholders can contact a person",
+        "category": "Usability",
+        "keyword_groups": [
+          [
+            "human",
+            "person",
+            "agent",
+            "call",
+            "contact"
+          ],
+          [
+            "policyholder",
+            "customer",
+            "support",
+            "talk"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-15",
+        "statement": "Communication in the policyholder's preferred language",
+        "category": "Usability",
+        "keyword_groups": [
+          [
+            "language",
+            "multilingual",
+            "vernacular"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-16",
+        "statement": "The platform can be extended to health and travel claims later",
+        "category": "Operational and maintenance",
+        "keyword_groups": [
+          [
+            "health",
+            "travel"
+          ],
+          [
+            "claim",
+            "product",
+            "extend",
+            "later",
+            "future"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      },
+      {
+        "id": "G-17",
+        "statement": "All claims data is kept indefinitely for analytics",
+        "category": "Data-management",
+        "keyword_groups": [
+          [
+            "indefinite",
+            "forever",
+            "analytic"
+          ],
+          [
+            "data",
+            "claim",
+            "kept",
+            "keep",
+            "retain"
+          ]
+        ],
+        "expected_sources": [],
+        "status": "DRAFT"
+      }
+    ],
+    "ambiguities": [
+      {
+        "id": "A-1",
+        "phrase": "settled very quickly",
+        "keywords": [
+          "quick",
+          "fast",
+          "prompt"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "A-2",
+        "phrase": "simple claims",
+        "keywords": [
+          "simple"
+        ],
+        "status": "DRAFT"
+      },
+      {
+        "id": "A-3",
+        "phrase": "even where the network is poor",
+        "keywords": [
+          "poor",
+          "network",
+          "connectivity"
+        ],
+        "status": "DRAFT"
+      }
+    ],
+    "conflicts": [
+      {
+        "id": "C-1",
+        "description": "Claims data kept indefinitely for analytics versus eight-year retention and use only for handling the claim",
+        "sides": [
+          [
+            "G-17"
+          ],
+          [
+            "G-12",
+            "G-11"
+          ]
+        ],
+        "keyword_groups": [
+          [
+            "indefinite",
+            "forever",
+            "analytics"
+          ],
+          [
+            "eight year",
+            "8 year",
+            "retention",
+            "purpose"
+          ]
+        ],
+        "status": "DRAFT"
+      }
+    ],
+    "sdlc": {
+      "top": "Incremental",
+      "reason": "Staged delivery (motor first, health and travel later) around a legacy system that stays",
+      "acceptable": [
+        {
+          "model": "Agile",
+          "reason": "Evolving needs and user feedback from policyholders and surveyors"
+        },
+        {
+          "model": "Agile-V",
+          "reason": "Iterative delivery with verification for regulated claims handling"
+        }
+      ],
+      "status": "DRAFT"
+    }
+  }
+}
