@@ -201,7 +201,8 @@ def test_single_stage_endpoints_are_recorded_too(fresh_db, monkeypatch):
 def test_audit_endpoint_is_auditor_only_and_filters(fresh_db, monkeypatch):
     d, _ = _run_pipeline(monkeypatch, role="architect")
     assert client.get("/audit").status_code == 403
-    assert client.get("/audit", headers={"X-Role": "compliance officer"}).status_code == 403
+    assert client.get("/audit", headers={"X-Role": "product owner"}).status_code == 403
+    assert client.get("/audit", headers={"X-Role": "compliance officer"}).status_code == 200
     r = client.get(f"/audit?run_id={d['run_id']}&action=stage_run", headers={"X-Role": "auditor"}).json()
     assert len(r["events"]) == 7 and all(e["action"] == "stage_run" for e in r["events"])
     assert r["chain"]["ok"] is True

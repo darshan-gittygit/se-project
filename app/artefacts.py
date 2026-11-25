@@ -26,8 +26,11 @@ def all_requirements(requirements: dict) -> list[dict]:
 
 def source_statement(req: dict) -> dict:
     """The original stakeholder statement behind one requirement (empty text when it rests on assumptions)."""
-    return {"requirement_id": req["id"], "stakeholder": req.get("source_stakeholder", ""),
-            "statement": req.get("source_text", ""), "assumptions": list(req.get("assumptions", []))}
+    out = {"requirement_id": req["id"], "stakeholder": req.get("source_stakeholder", ""),
+           "statement": req.get("source_text", ""), "assumptions": list(req.get("assumptions", []))}
+    if req.get("source_document"):
+        out["document"] = req["source_document"]   # additive: the uploaded file the quote is from
+    return out
 
 
 def source_statements(requirement_ids: list[str], requirements: dict) -> list[dict]:

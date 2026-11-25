@@ -115,7 +115,7 @@ def test_requirements_endpoint_recovers_on_retry(monkeypatch):
     r = client.post("/agents/requirements", json={"scenario": "A payroll system for a company"})
     assert r.status_code == 200 and len(calls) == 2
     assert set(r.json()) == {"domain_inferred", "assumptions", "functional_requirements",
-                             "non_functional_requirements", "meta"}
+                             "non_functional_requirements", "meta", "masking"}
 
 
 # --- compliance schema -----------------------------------------------------

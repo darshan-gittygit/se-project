@@ -14,10 +14,13 @@ the few-shot example and strict schema instructions in the prompt are for.
 import json
 
 from app.gemini_client import generate_text
+from app.prompt_safety import DATA_RULE, untrusted
 from app.schemas import RegeneratedRequirement, RequirementsOutput, generate_validated
 from app.vocabulary import REQUIREMENT_CATEGORIES, STAKEHOLDER_ROLES
 
 PROMPT_TEMPLATE = """You are a senior business analyst specializing in software requirements engineering.
+
+{data_rule}
 
 Given a scenario description (and any stakeholder interview answers), extract a clear, structured list of software requirements.
 
@@ -34,7 +37,7 @@ Rules:
   Rate each requirement on its own consequence. Working in a regulated domain is not by itself a reason for High.
 - categories: one or more of {categories}. A requirement may belong to several.
 - source_stakeholder: exactly one of {roles}.
-- source_text: copy, word for word, the phrase (at least 2 words) from the scenario or an interview answer that this requirement comes from. If the requirement is not stated there and you are inferring it, use "" and list what you assumed in that requirement's "assumptions".
+- source_text: copy, word for word, the phrase (at least 2 words) from the scenario, an interview answer or an uploaded document that this requirement comes from. If the requirement is not stated there and you are inferring it, use "" and list what you assumed in that requirement's "assumptions".
 - Any number you add that the input does not state (response times, uptime, limits) is an assumption: list it in that requirement's "assumptions".
 - business_justification: one sentence on why the business needs it.
 - acceptance_criteria: 1-3 checkable statements, with measurable values where possible.
@@ -49,8 +52,8 @@ Output:
 {example}
 
 Now do the same for this input.
-Scenario: "{scenario}"
-{answers}
+{scenario}
+{answers}{documents}
 Respond with ONLY the JSON object.
 """
 
@@ -92,13 +95,26 @@ EXAMPLE = {
 def _format_answers(answers: list[dict] | None) -> str:
     if not answers:
         return ""
-    lines = ["Interview answers so far:"]
+    lines = []
     for a in answers:
         lines.append(f"- [{a['role']}] Q: {a['question']}\n  A: {a['answer']}")
-    return "\n".join(lines) + "\n"
+    return untrusted("INTERVIEW ANSWERS", "\n".join(lines)) + "\n"
 
 
-def extract_requirements(scenario: str, answers: list[dict] | None = None) -> dict:
+def _format_documents(documents: list[dict] | None) -> str:
+    if not documents:
+        return ""
+    return "\n".join(untrusted(f"DOCUMENT {d['filename']}", d["text"]) for d in documents) + "\n"
+
+
+def source_texts(scenario: str, answers: list[dict] | None = None, documents: list[dict] | None = None) -> list[dict]:
+    """Texts a source_text quote may come from (scenario, answers with their role, documents with their name)."""
+    return ([{"text": scenario, "role": None}]
+            + [{"text": a["answer"], "role": a["role"]} for a in (answers or [])]
+            + [{"text": d["text"], "role": None, "document": d["filename"]} for d in (documents or [])])
+
+
+def extract_requirements(scenario: str, answers: list[dict] | None = None, documents: list[dict] | None = None) -> dict:
     """
     Returns a dict with keys: domain_inferred, assumptions,
     functional_requirements, non_functional_requirements, validated against
@@ -111,23 +127,24 @@ def extract_requirements(scenario: str, answers: list[dict] | None = None) -> di
         categories=", ".join(REQUIREMENT_CATEGORIES),
         roles=", ".join(STAKEHOLDER_ROLES),
         example=json.dumps(EXAMPLE, indent=1),
-        scenario=scenario.strip(),
+        scenario=untrusted("SCENARIO", scenario.strip()),
         answers=_format_answers(answers),
+        documents=_format_documents(documents),
+        data_rule=DATA_RULE,
     )
-    source_texts = [{"text": scenario, "role": None}] + [
-        {"text": a["answer"], "role": a["role"]} for a in (answers or [])
-    ]
     result = generate_validated(
         prompt, RequirementsOutput, generate=generate_text,
         temperature=0.1,  # low: steadier requirement lists run to run
-        context={"source_texts": source_texts},
+        context={"source_texts": source_texts(scenario, answers, documents)},
     )
     return result.model_dump()
 
 
 REGENERATE_TEMPLATE = """You are a senior business analyst. A reviewer asked you to rewrite one requirement record.
 
-Scenario: "{scenario}"
+{data_rule}
+
+{scenario}
 
 All requirement ids in this specification: {ids}
 
@@ -144,15 +161,17 @@ Respond with ONLY valid JSON, no markdown fences, in exactly this schema:
 """
 
 
-def regenerate_requirement(record: dict, comment: str, scenario: str, all_ids: list[str]) -> dict:
+def regenerate_requirement(record: dict, comment: str, scenario: str, all_ids: list[str],
+                           sources: list[dict] | None = None) -> dict:
     """Approval action "regenerate" for one requirement: one validated LLM call, same rules as Agent 1."""
     editable = {k: v for k, v in record.items()
-                if k not in ("type", "confidence", "approval_status", "applicable_regulations")}
+                if k not in ("type", "confidence", "approval_status", "applicable_regulations", "source_document")}
     prompt = REGENERATE_TEMPLATE.format(
-        scenario=scenario.strip(), ids=", ".join(all_ids), record=json.dumps(editable, indent=1),
-        comment=comment.strip(), rid=record["id"], categories=", ".join(REQUIREMENT_CATEGORIES),
+        scenario=untrusted("SCENARIO", scenario.strip()), ids=", ".join(all_ids),
+        record=untrusted("CURRENT RECORD", json.dumps(editable, indent=1)),
+        comment=untrusted("REVIEWER COMMENT", comment.strip()), data_rule=DATA_RULE, rid=record["id"], categories=", ".join(REQUIREMENT_CATEGORIES),
         roles=", ".join(STAKEHOLDER_ROLES))
     out = generate_validated(prompt, RegeneratedRequirement, generate=generate_text, temperature=0.2,
                              context={"requirement_id": record["id"], "all_ids": all_ids,
-                                      "source_texts": [{"text": scenario, "role": None}]})
+                                      "source_texts": sources or [{"text": scenario, "role": None}]})
     return out.model_dump()["requirement"]

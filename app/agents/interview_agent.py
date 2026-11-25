@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field, StrictInt, ValidationInfo, field_validato
 
 from app.agents.interview_templates import TEMPLATES, TEMPLATES_BY_ID
 from app.gemini_client import generate_text
+from app.prompt_safety import DATA_RULE, untrusted
 from app.schemas import _NonEmptyText, _ctx, generate_validated
 from app.vocabulary import INTERVIEW_TOPICS, STAKEHOLDER_ROLES, canonical
 
@@ -96,6 +97,8 @@ class FollowUpOutput(BaseModel):
 
 PROMPT_TEMPLATE = """You are a requirements engineer running a stakeholder interview for a new software system.
 
+{data_rule}
+
 Scenario:
 {scenario}
 
@@ -136,8 +139,10 @@ def next_questions(scenario: str, answers: list[dict] | None = None,
     unasked = [t for t in TEMPLATES if t["id"] not in answered_ids]
 
     prompt = PROMPT_TEMPLATE.format(
-        scenario=scenario.strip(),
-        answers="\n".join(f"{i}: [{a['role']}] {a['question']} -> {a['answer']}" for i, a in enumerate(answers)) or "(none yet)",
+        scenario=untrusted("SCENARIO", scenario.strip()),
+        answers=untrusted("INTERVIEW ANSWERS", "\n".join(f"{i}: [{a['role']}] {a['question']} -> {a['answer']}"
+                                                       for i, a in enumerate(answers)) or "(none yet)"),
+        data_rule=DATA_RULE,
         uncovered=", ".join(uncovered) or "(all topics covered)",
         templates="\n".join(f"{t['id']} | {t['role']} | {t['topic']} | {t['question']}" for t in unasked) or "(all asked)",
         max_questions=max_questions,

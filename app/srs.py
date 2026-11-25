@@ -38,13 +38,14 @@ def _ids(ids): return ", ".join(ids) or "-"
 
 def _source(s: dict) -> str:
     if s.get("statement"):
-        return f'{s["stakeholder"]}: "{s["statement"]}"'
+        where = f' (document {s["document"]})' if s.get("document") else ""
+        return f'{s["stakeholder"]}: "{s["statement"]}"{where}'
     return f'{s.get("stakeholder", "")}: no stakeholder statement; assumed: {"; ".join(s.get("assumptions") or []) or "-"}'
 
 
 def _req_source(r: dict) -> str:
     return _source({"stakeholder": r.get("source_stakeholder", ""), "statement": r.get("source_text", ""),
-                    "assumptions": r.get("assumptions", [])})
+                    "assumptions": r.get("assumptions", []), "document": r.get("source_document")})
 
 
 def _sources(item: dict) -> str:

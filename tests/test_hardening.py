@@ -74,7 +74,9 @@ def test_meta_reports_fallback_model_not_configured_one(fake_sdk):
         return reply_for(prompt)
     fake_sdk["behaviour"] = behaviour
     d = client.post("/agents/requirements", json={"scenario": "A payroll system for a company"}).json()
-    assert d["meta"] == {"model": FALLBACK, "models_used": [FALLBACK]}
+    assert {k: d["meta"][k] for k in ("model", "models_used", "models")} == {
+        "model": FALLBACK, "models_used": [FALLBACK], "models": [FALLBACK]}
+    assert d["meta"]["app_version"] and d["meta"]["kb_version"].startswith("kb-") and d["meta"]["embedding_model"]
 
 
 def test_meta_lists_every_model_when_calls_were_served_by_different_models(fake_sdk):

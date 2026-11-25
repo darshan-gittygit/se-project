@@ -17,6 +17,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, StrictInt, ValidationInfo, field_validator, model_validator
 
 from app.gemini_client import generate_text
+from app.prompt_safety import DATA_RULE, untrusted
 from app.schemas import _NonEmptyText, _ctx, generate_validated
 from app.vocabulary import canonical
 
@@ -86,6 +87,8 @@ class RiskOutput(BaseModel):
 
 PROMPT_TEMPLATE = """You are a risk analyst building the threat and risk register for a software project.
 
+{data_rule}
+
 Domain: {domain}
 Scenario: {scenario}
 
@@ -133,9 +136,11 @@ def _quality_lines(quality: dict | None) -> str:
 def build_risk_register(domain: str, requirements: list[dict], scenario: str | None = None,
                         compliance_mapping: dict | None = None, quality: dict | None = None) -> dict:
     prompt = PROMPT_TEMPLATE.format(
-        domain=domain, scenario=(scenario or "(not provided)").strip(),
-        requirements="\n".join(f"- {r['id']} [{r.get('risk_level', '-')}]: {r['requirement']}" for r in requirements),
-        compliance=_compliance_lines(compliance_mapping), quality=_quality_lines(quality),
+        domain=untrusted("DOMAIN", domain), scenario=untrusted("SCENARIO", (scenario or "(not provided)").strip()),
+        requirements=untrusted("REQUIREMENTS", "\n".join(
+            f"- {r['id']} [{r.get('risk_level', '-')}]: {r['requirement']}" for r in requirements)),
+        compliance=untrusted("COMPLIANCE GAPS", _compliance_lines(compliance_mapping)),
+        quality=untrusted("QUALITY FLAGS", _quality_lines(quality)), data_rule=DATA_RULE,
         min_risks=MIN_RISKS, max_risks=MAX_RISKS, likelihood=LIKELIHOOD_RUBRIC, impact=IMPACT_RUBRIC,
     )
     out = generate_validated(prompt, RiskOutput, generate=generate_text, temperature=0.2,

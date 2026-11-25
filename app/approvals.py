@@ -93,6 +93,13 @@ def _reopen_baseline(conn, run_id) -> bool:
     return False
 
 
+def _sources(run) -> list[dict]:
+    """The (masked) scenario, interview answers and documents a requirement quote may come from."""
+    from app.agents.requirement_agent import source_texts
+    r = run["result"]
+    return source_texts(r.get("scenario", ""), r.get("answers"), r.get("documents"))
+
+
 # --- content checks for "modify" -------------------------------------------------
 
 def _validated_requirement(run, current, changes) -> dict:
@@ -103,8 +110,7 @@ def _validated_requirement(run, current, changes) -> dict:
     all_ids = [it["item_id"] for it in current_items(run["run_id"]) if it["item_type"] == "requirement"]
     try:
         rec = Requirement.model_validate(merged)
-        complete_requirement(rec, "NFR" if rec.id.startswith("NFR") else "FR", all_ids,
-                             [{"text": run["result"].get("scenario", ""), "role": None}], status="modified")
+        complete_requirement(rec, "NFR" if rec.id.startswith("NFR") else "FR", all_ids, _sources(run), status="modified")
     except (ValidationError, ValueError) as e:
         raise InvalidInput(f"Modified requirement is not valid: {e}")
     return rec.model_dump()
@@ -155,7 +161,7 @@ def _regenerate(run, current, comment) -> dict:
     domain = result["requirements"].get("domain_inferred", "Unknown")
     if current["item_type"] == "requirement":
         return requirement_agent.regenerate_requirement(current["content"], comment, result.get("scenario", ""),
-                                                        [r["id"] for r in frs + nfrs])
+                                                        [r["id"] for r in frs + nfrs], _sources(run))
     if current["item_type"] == "compliance":
         rid, source = current["item_id"].split("/", 1)
         req = [r for r in frs + nfrs if r["id"] == rid]

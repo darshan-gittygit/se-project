@@ -17,6 +17,7 @@ from typing import Callable, Literal
 from pydantic import BaseModel, Field, StrictInt, ValidationError, ValidationInfo, field_validator, model_validator
 
 from app.json_utils import parse_json_response
+from app.prompt_safety import output_problem
 from app.vocabulary import (
     APPROVAL_STATUSES, LEVELS, REQUIREMENT_CATEGORIES, STAKEHOLDER_ROLES, canonical,
 )
@@ -61,6 +62,7 @@ class Requirement(_NonEmptyText):
     categories: list[Literal[REQUIREMENT_CATEGORIES]] = Field(min_length=1)
     source_stakeholder: Literal[STAKEHOLDER_ROLES]
     source_text: str = ""                                          # exact quote it derives from, or "" if assumed
+    source_document: str | None = None                             # set by code: uploaded file the quote is from
     business_justification: str = Field(min_length=1)
     dependencies: list[str] = Field(default_factory=list)          # other requirement ids
     assumptions: list[str] = Field(default_factory=list)
@@ -145,6 +147,7 @@ def complete_requirement(r: Requirement, prefix: str, ids: list[str], sources: l
     bad_deps = [d for d in r.dependencies if d not in ids or d == r.id]
     if bad_deps:
         raise ValueError(f"{r.id}: dependencies must be other requirement ids from this list, got {bad_deps}")
+    document = None
     if r.source_text:
         if len(r.source_text.split()) < MIN_SOURCE_WORDS:
             raise ValueError(f"{r.id}: source_text must quote at least {MIN_SOURCE_WORDS} words")
@@ -152,12 +155,14 @@ def complete_requirement(r: Requirement, prefix: str, ids: list[str], sources: l
             quote = _normalise(r.source_text)
             origin = next((s for s in sources if quote in _normalise(s["text"])), None)
             if origin is None:
-                raise ValueError(f"{r.id}: source_text is not an exact quote from the scenario "
-                                 f"or interview answers: {r.source_text!r}")
+                raise ValueError(f"{r.id}: source_text is not an exact quote from the scenario, "
+                                 f"interview answers or uploaded documents: {r.source_text!r}")
             if origin.get("role"):
                 r.source_stakeholder = origin["role"]  # the person who actually said it
+            document = origin.get("document")
     elif not r.assumptions:
         raise ValueError(f"{r.id}: give a source_text quote or list the assumptions it relies on")
+    r.source_document = document  # only ever set from a verified quote, never taken from the model
     r.type = prefix
     r.confidence = _confidence(r)
     r.approval_status = status
@@ -314,6 +319,10 @@ RETRY_NOTE = (
 )
 
 
+class OutputRejected(ValueError):
+    """Schema-valid output that failed the output safety check."""
+
+
 def describe_error(exc: Exception) -> str:
     if isinstance(exc, ValidationError):
         parts = []
@@ -321,6 +330,8 @@ def describe_error(exc: Exception) -> str:
             loc = ".".join(str(p) for p in e["loc"]) or "response"
             parts.append(f"{loc}: {e['msg']}")
         return "; ".join(parts)
+    if isinstance(exc, OutputRejected):
+        return str(exc)
     return "the response was not valid JSON"
 
 
@@ -342,7 +353,11 @@ def generate_validated(
     for _ in range(MAX_ATTEMPTS):
         raw = generate(current, temperature=temperature)
         try:
-            return schema.model_validate(parse_json_response(raw), context=context)
+            parsed = schema.model_validate(parse_json_response(raw), context=context)
+            problem = output_problem(raw)   # secrets or unmasked sensitive data (app/prompt_safety.py)
+            if problem:
+                raise OutputRejected(problem)
+            return parsed
         except ValueError as exc:  # pydantic's ValidationError is a ValueError
             error = describe_error(exc)
             current = prompt + RETRY_NOTE.format(error=error)

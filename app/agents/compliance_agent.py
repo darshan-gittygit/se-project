@@ -26,6 +26,7 @@ Pipeline:
 """
 from app.agents.compliance_mapping import build_mapping
 from app.gemini_client import generate_text
+from app.prompt_safety import DATA_RULE, untrusted
 from app.rag.kb_metadata import applies, classify_domains, generic_sources
 from app.rag.retriever import known_sources, retrieve_many
 from app.schemas import ComplianceOutput, generate_validated
@@ -53,6 +54,8 @@ def source_scope(source: str) -> str:
     return SCOPE_GENERIC if source in GENERIC_SOURCES else SCOPE_DOMAIN
 
 PROMPT_TEMPLATE = """You are a compliance and risk analyst reviewing software requirements against a curated regulatory knowledge base.
+
+{data_rule}
 
 Domain: {domain}
 
@@ -194,15 +197,16 @@ def analyze_compliance(domain: str, functional_requirements: list[dict], non_fun
     sources_used = sorted({c["source"] for c in relevant})
 
     prompt = PROMPT_TEMPLATE.format(
-        domain=domain,
-        functional_list=_format_requirements(functional_requirements),
-        non_functional_list=_format_requirements(non_functional_requirements),
+        domain=untrusted("DOMAIN", domain),
+        functional_list=untrusted("FUNCTIONAL REQUIREMENTS", _format_requirements(functional_requirements)),
+        non_functional_list=untrusted("NON-FUNCTIONAL REQUIREMENTS", _format_requirements(non_functional_requirements)),
+        data_rule=DATA_RULE,
         kb_relevance=kb_relevance,
         retrieved_context=_format_retrieved_context(relevant),
         allowed_sources=", ".join(sources_used) or "(none)",
     )
     if reviewer_comment:  # approval action "regenerate" (app/approvals.py)
-        prompt += REVIEWER_NOTE.format(comment=reviewer_comment.strip())
+        prompt += REVIEWER_NOTE.format(comment=untrusted("REVIEWER COMMENT", reviewer_comment.strip()))
     # Schema check: risk_level enum, known requirement ids, and sources that
     # exist in the knowledge base at all (an invented name like "GDPR Article
     # 17" is invalid output and triggers the retry). A real source that was

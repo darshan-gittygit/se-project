@@ -26,7 +26,9 @@ Built by Darshan - NIT Karnataka, Surathkal (CS305 Software Engineering course p
 
 Every LLM reply is checked against a schema (`app/schemas.py`): allowed values, known requirement IDs, real knowledge-base sources, all nine traits as integers 1-5. An invalid reply is retried once with the errors, then the API returns a 502 rather than guessing.
 
-**Approvals and audit (API):** each pipeline run is stored in `data/app.db` with its requirements, regulatory interpretations and SDLC selection as approval items. Send your role in an `X-Role` header (business analyst, product owner, security officer, compliance officer, project manager, architect, auditor) to accept, reject, modify or regenerate items (`POST /runs/<run_id>/approvals`) and to freeze the baseline (`POST /runs/<run_id>/baseline/freeze`). Every stage, action and artefact goes into a tamper-evident audit log the auditor can read at `GET /audit`. The role header is a stand-in for real sign-in. `/agents/pipeline?artefacts=false` skips the artefact LLM call.
+**Input protection:** sensitive values (emails, phones, card numbers, Aadhaar/PAN-style ids, IBANs, account and SSN-style numbers) are replaced with placeholders such as `[EMAIL_1]` before any model call or storage, user text is fenced off as data in every prompt, and obvious injection attempts ("ignore previous instructions", "reveal your system prompt" ...) are rejected with 400. You can attach `.txt`, `.md` or `.csv` documents as JSON (`documents: [{"filename", "text"}]`, up to 20,000 characters each).
+
+**Approvals and audit (API):** each pipeline run is stored in `data/app.db` with its requirements, regulatory interpretations and SDLC selection as approval items. Send your role in an `X-Role` header (business analyst, product owner, security officer, compliance officer, project manager, architect, auditor) to accept, reject, modify or regenerate items (`POST /runs/<run_id>/approvals`) and to freeze the baseline (`POST /runs/<run_id>/baseline/freeze`). Every stage, action and artefact goes into a tamper-evident audit log the auditor can read at `GET /audit`. The role header is a stand-in for real sign-in; set `REQUIRE_ROLE=1` to reject requests without it. `RETENTION_DAYS` with `python -m app.retention` deletes old runs (audit history is kept). `/agents/pipeline?artefacts=false` skips the artefact LLM call.
 
 Download the SRS of a pipeline run from the links in its `srs` key, e.g. `GET /agents/srs/<id>?format=html`, or `POST /agents/srs?format=markdown` with a saved pipeline result.
 
@@ -100,6 +102,10 @@ app/
   roles.py                   roles (X-Role header) and the permission table
   approvals.py               accept / reject / modify / regenerate, versions, baseline freeze
   audit.py                   append-only, hash-chained audit log and its verifier
+  masking.py                 sensitive-data detection and placeholders
+  prompt_safety.py           prompt delimiters, injection filter, output checks
+  input_guard.py             per-request masking + filtering, document upload checks
+  retention.py               purge old runs (python -m app.retention)
     compliance_agent.py      Agent 3 (RAG)
     sdlc_agent.py            Agent 2 (trait extraction + justification)
     sdlc_rules.py            deterministic SDLC scoring engine

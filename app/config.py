@@ -18,8 +18,24 @@ STATIC_DIR = PROJECT_ROOT / "app" / "static"
 # first use; gitignored. REQUORA_DB_PATH overrides it (the tests use a temp file).
 DB_PATH = Path(os.environ.get("REQUORA_DB_PATH", str(PROJECT_ROOT / "data" / "app.db")))
 
-# Recorded in every audit event. Bump it when behaviour changes.
-APP_VERSION = "0.5.0"
+# Recorded in every audit event and run. Bump it when behaviour changes.
+APP_VERSION = "0.5.1"
+
+
+def retention_days() -> int | None:
+    """RETENTION_DAYS: delete stored runs older than this many days (python -m app.retention). Unset = keep."""
+    raw = os.environ.get("RETENTION_DAYS", "").strip()
+    if not raw:
+        return None
+    days = int(raw)
+    if days < 1:
+        raise ValueError("RETENTION_DAYS must be a positive number of days")
+    return days
+
+
+def require_role() -> bool:
+    """REQUIRE_ROLE=1/true/yes/on: API requests without an X-Role header get 400. Off by default (the UI sends none yet)."""
+    return os.environ.get("REQUIRE_ROLE", "").strip().lower() in ("1", "true", "yes", "on")
 
 load_dotenv(PROJECT_ROOT / ".env")  # reads .env from the project root if present
 

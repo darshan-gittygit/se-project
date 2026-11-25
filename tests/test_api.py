@@ -198,7 +198,7 @@ def test_trait_extraction_runs_at_temperature_zero(monkeypatch):
 
 SDLC_RESPONSE_KEYS = {
     "traits", "trait_details", "scored_models", "recommended_model",
-    "is_close_call", "justification", "approval_required", "meta",
+    "is_close_call", "justification", "approval_required", "meta", "masking",
 }
 
 

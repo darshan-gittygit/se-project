@@ -22,6 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validat
 
 from app.artefacts import all_requirements, source_statements
 from app.gemini_client import generate_text
+from app.prompt_safety import DATA_RULE, untrusted
 from app.schemas import _NonEmptyText, _ctx, generate_validated
 
 SPLIT_THRESHOLD = 20
@@ -140,6 +141,8 @@ SECTION_RULES = {
 
 PROMPT_TEMPLATE = """You are a requirements engineer writing the artefacts of a Software Requirements Specification.
 
+{data_rule}
+
 Domain: {domain}
 Scenario: {scenario}
 
@@ -164,8 +167,9 @@ def _listing(requirements: dict) -> str:
 
 def _call(schema, kinds, requirements, scenario, context):
     prompt = PROMPT_TEMPLATE.format(
-        domain=requirements.get("domain_inferred", ""), scenario=(scenario or "(not provided)").strip(),
-        requirements=_listing(requirements), rules="\n".join(SECTION_RULES[k] for k in kinds),
+        domain=untrusted("DOMAIN", requirements.get("domain_inferred", "")),
+        scenario=untrusted("SCENARIO", (scenario or "(not provided)").strip()),
+        requirements=untrusted("REQUIREMENTS", _listing(requirements)), data_rule=DATA_RULE, rules="\n".join(SECTION_RULES[k] for k in kinds),
         keys=", ".join(f'"{k}"' for k in kinds))
     return generate_validated(prompt, schema, generate=generate_text, temperature=0.2, context=context).model_dump()
 

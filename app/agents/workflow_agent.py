@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_va
 
 from app.agents.sdlc_workflows import BASE_WORKFLOWS, WORKFLOW_FIELDS
 from app.gemini_client import generate_text
+from app.prompt_safety import DATA_RULE, untrusted
 from app.schemas import _NonEmptyText, _ctx, _normalise, generate_validated
 
 MAX_ADDITIONS = 25
@@ -66,6 +67,8 @@ class WorkflowAdditions(BaseModel):
 
 
 PROMPT_TEMPLATE = """You are tailoring the {model} software development workflow to one project.
+
+{data_rule}
 
 Domain: {domain}
 
@@ -128,9 +131,11 @@ def generate_workflow(model: str, domain: str, requirements: list[dict],
     names = [p["name"] for p in base_phases]
     base_items = {(p["name"], f): {_normalise(x) for x in p[f]} for p in base_phases for f in WORKFLOW_FIELDS}
     prompt = PROMPT_TEMPLATE.format(
-        model=model, domain=domain,
-        requirements="\n".join(f"- {r['id']} [{', '.join(r.get('categories') or [])}]: {r['requirement']}" for r in requirements),
-        compliance=_compliance_lines(compliance_mapping), risks=_risk_lines(risk_register),
+        model=model, domain=untrusted("DOMAIN", domain),
+        requirements=untrusted("REQUIREMENTS", "\n".join(
+            f"- {r['id']} [{', '.join(r.get('categories') or [])}]: {r['requirement']}" for r in requirements)),
+        compliance=untrusted("COMPLIANCE FINDINGS", _compliance_lines(compliance_mapping)),
+        risks=untrusted("TOP RISKS", _risk_lines(risk_register)), data_rule=DATA_RULE,
         base=_base_listing(base_phases), fields=", ".join(WORKFLOW_FIELDS), max_additions=MAX_ADDITIONS,
     )
     out = generate_validated(

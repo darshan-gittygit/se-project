@@ -20,6 +20,7 @@ from itertools import combinations
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 from app.gemini_client import generate_text
+from app.prompt_safety import DATA_RULE, untrusted
 from app.schemas import _NonEmptyText, _ctx, generate_validated
 
 FLAG_TYPES = ("ambiguity", "untestable", "duplicate", "conflict")
@@ -126,6 +127,8 @@ class ConflictOutput(BaseModel):
 
 CONFLICT_PROMPT = """You are reviewing a software requirements list for CONFLICTS.
 
+{data_rule}
+
 Domain: {domain}
 
 Requirements (id: statement | acceptance criteria):
@@ -146,7 +149,8 @@ def conflict_flags(domain: str, reqs: list[dict]) -> list[dict]:
         for r in reqs
     )
     out = generate_validated(
-        CONFLICT_PROMPT.format(domain=domain, requirements=listing), ConflictOutput,
+        CONFLICT_PROMPT.format(domain=untrusted("DOMAIN", domain), requirements=untrusted("REQUIREMENTS", listing),
+                               data_rule=DATA_RULE), ConflictOutput,
         generate=generate_text, temperature=0.1,
         context={"requirement_ids": {r["id"] for r in reqs}},
     )

@@ -11,7 +11,9 @@ and registers version 1 of every item that needs human approval
                   mapping (a regulatory interpretation)
 - sdlc            the SDLC selection                    item_id "sdlc"
 
-All three kinds are mandatory for freezing the baseline. Later versions are
+Requirements and compliance interpretations are mandatory for freezing the
+baseline; the SDLC selection is approved separately (all four section-14
+approvers) and shown in the approval summary and SRS, but does not block it. Later versions are
 created by approval actions (app/approvals.py). with_current_state() lays the
 current versions and statuses over the stored result, so the SRS shows the
 real approval state.
@@ -32,18 +34,22 @@ def new_run_id() -> str:
     return uuid.uuid4().hex[:12]
 
 
-def initial_items(result: dict) -> list[tuple[str, str, dict]]:
+def initial_items(result: dict) -> list[tuple[str, str, dict, bool]]:
+    """(item_type, item_id, content, mandatory_for_baseline)."""
     req = result.get("requirements", {})
-    items = [("requirement", r["id"], r) for r in req.get("functional_requirements", []) + req.get("non_functional_requirements", [])]
+    items = [("requirement", r["id"], r, True)
+             for r in req.get("functional_requirements", []) + req.get("non_functional_requirements", [])]
     for e in (result.get("compliance_mapping") or {}).get("requirements", []):
         for m in e["mappings"]:
             if m.get("scope") == "domain-specific":
-                items.append(("compliance", f"{e['requirement_id']}/{m['source']}", {"requirement_id": e["requirement_id"], **m}))
+                items.append(("compliance", f"{e['requirement_id']}/{m['source']}",
+                              {"requirement_id": e["requirement_id"], **m}, True))
     sdlc = result.get("sdlc_recommendation")
     if sdlc:
+        # Approved separately by the four section-14 approvers; does not block the requirement baseline.
         items.append(("sdlc", "sdlc", {
             "recommended_model": sdlc["recommended_model"], "is_close_call": sdlc.get("is_close_call", False),
-            "ranking": [{"model": m["model"], "score": m["score"]} for m in sdlc.get("scored_models", [])]}))
+            "ranking": [{"model": m["model"], "score": m["score"]} for m in sdlc.get("scored_models", [])]}, False))
     return items
 
 
@@ -54,10 +60,10 @@ def save_run(run_id: str, result: dict, role: str) -> None:
                      "VALUES (?, ?, ?, ?, ?, ?, ?)",
                      (run_id, ts, role, config.APP_VERSION, kb_version(), result.get("scenario", ""),
                       json.dumps(result, ensure_ascii=False)))
-        for item_type, item_id, content in initial_items(result):
+        for item_type, item_id, content, mandatory in initial_items(result):
             conn.execute("INSERT INTO approval_items (run_id, item_type, item_id, version, status, mandatory, "
-                         "content_json, regenerations, created_at, updated_at) VALUES (?, ?, ?, 1, 'proposed', 1, ?, 0, ?, ?)",
-                         (run_id, item_type, item_id, json.dumps(content, ensure_ascii=False), ts, ts))
+                         "content_json, regenerations, created_at, updated_at) VALUES (?, ?, ?, 1, 'proposed', ?, ?, 0, ?, ?)",
+                         (run_id, item_type, item_id, int(mandatory), json.dumps(content, ensure_ascii=False), ts, ts))
 
 
 def get_run(run_id: str) -> dict | None:

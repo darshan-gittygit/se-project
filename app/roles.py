@@ -36,7 +36,7 @@ PERMISSIONS = {
     # "SDLC selection" - section 14 names all four, so all four must accept.
     "review_sdlc": {PROJECT_MANAGER, ARCHITECT, SECURITY_OFFICER, COMPLIANCE_OFFICER},
     "freeze_baseline": {PRODUCT_OWNER, BUSINESS_ANALYST},
-    "read_audit": {AUDITOR},
+    "read_audit": {AUDITOR, COMPLIANCE_OFFICER},
 }
 SDLC_APPROVERS_REQUIRED = PERMISSIONS["review_sdlc"]
 

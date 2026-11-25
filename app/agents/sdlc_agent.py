@@ -21,6 +21,7 @@ Pipeline:
 import re
 
 from app.gemini_client import generate_text
+from app.prompt_safety import DATA_RULE, untrusted
 from app.schemas import Justification, TraitRatings, generate_validated
 from app.agents.sdlc_rules import (
     score_models, explain_mismatch, is_close_call, top_two_tied, explain_tie_break, TRAIT_LABELS,
@@ -146,6 +147,8 @@ For security risk, size, legacy dependence, continuous delivery, availability an
 
 TRAIT_PROMPT_TEMPLATE = """You are a software engineering process consultant rating project characteristics (15 traits), using ONLY the rubrics provided below. Do not invent your own scale.
 
+{data_rule}
+
 {rubrics}
 
 Original scenario (the stakeholder's own words; the best evidence for how settled and how changeable the needs are):
@@ -191,6 +194,8 @@ Respond with ONLY valid JSON, no markdown fences, no commentary, in exactly this
 """
 
 JUSTIFICATION_PROMPT_TEMPLATE = """You are a software engineering process consultant writing a structured recommendation report for a stakeholder.
+
+{data_rule}
 
 Domain: {domain}
 
@@ -290,13 +295,15 @@ def analyze_traits(
     """
     prompt = TRAIT_PROMPT_TEMPLATE.format(
         rubrics=TRAIT_RUBRICS,
-        scenario=scenario.strip() if scenario and scenario.strip() else "(not provided - rate from the domain and requirements only)",
-        domain=domain,
-        functional_list=_format_requirements(functional_requirements),
-        non_functional_list=_format_requirements(non_functional_requirements),
+        scenario=untrusted("SCENARIO", scenario.strip()) if scenario and scenario.strip()
+        else "(not provided - rate from the domain and requirements only)",
+        domain=untrusted("DOMAIN", domain),
+        functional_list=untrusted("FUNCTIONAL REQUIREMENTS", _format_requirements(functional_requirements)),
+        non_functional_list=untrusted("NON-FUNCTIONAL REQUIREMENTS", _format_requirements(non_functional_requirements)),
+        data_rule=DATA_RULE,
     )
     if reviewer_comment:  # approval action "regenerate": the reviewer can only influence the ratings
-        prompt += REVIEWER_NOTE.format(comment=reviewer_comment.strip())
+        prompt += REVIEWER_NOTE.format(comment=untrusted("REVIEWER COMMENT", reviewer_comment.strip()))
     # Temperature 0: trait scores feed a deterministic scorer, so the same
     # requirements should produce the same scores as far as the model allows.
     ratings = generate_validated(prompt, TraitRatings, generate=generate_text, temperature=0)
@@ -357,12 +364,13 @@ def recommend_sdlc(
         close_call_note = ""
 
     justification_prompt = JUSTIFICATION_PROMPT_TEMPLATE.format(
-        domain=domain,
-        trait_summary=_format_trait_summary(trait_details),
+        domain=untrusted("DOMAIN", domain),
+        trait_summary=untrusted("MEASURED TRAITS AND EVIDENCE", _format_trait_summary(trait_details)),
+        data_rule=DATA_RULE,
         top_model=top["model"],
         top_score=top["score"],
         close_call_note=close_call_note,
-        key_requirements=_format_requirements(key_reqs),
+        key_requirements=untrusted("KEY REQUIREMENTS", _format_requirements(key_reqs)),
     )
     justification = generate_validated(
         justification_prompt, Justification, generate=generate_text, temperature=0.3,

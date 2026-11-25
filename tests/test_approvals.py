@@ -65,7 +65,8 @@ def test_run_registers_every_mandatory_item_as_proposed(run_id):
                     ("requirement", "NFR-1", 1, "proposed"), ("requirement", "NFR-2", 1, "proposed"),
                     ("compliance", "FR-1/kyc_aml", 1, "proposed"), ("compliance", "FR-2/fair_lending", 1, "proposed"),
                     ("sdlc", "sdlc", 1, "proposed")]
-    assert all(i["mandatory"] for i in d["items"]) and len(d["blockers"]) == 7
+    assert [i["mandatory"] for i in d["items"]] == [True] * 6 + [False]   # the SDLC selection does not block the baseline
+    assert len(d["blockers"]) == 6
     assert d["baseline"]["status"] == "open" and d["kb_version"].startswith("kb-")
 
 
@@ -95,6 +96,31 @@ def test_auditor_is_read_only(run_id):
     assert client.post(f"/runs/{run_id}/baseline/freeze", headers=H(AUD)).status_code == 403
     assert client.get(f"/runs/{run_id}", headers=H(AUD)).status_code == 200
     assert client.get(f"/agents/srs/{run_id}", headers=H(AUD)).status_code == 200
+
+
+@pytest.mark.parametrize("value, expected", [(None, False), ("", False), ("0", False), ("1", True), ("TRUE", True), ("on", True)])
+def test_require_role_flag_parsing(monkeypatch, value, expected):
+    from app import config
+    if value is None:
+        monkeypatch.delenv("REQUIRE_ROLE", raising=False)
+    else:
+        monkeypatch.setenv("REQUIRE_ROLE", value)
+    assert config.require_role() is expected
+
+
+def test_require_role_rejects_requests_without_a_header(run_id, monkeypatch):
+    monkeypatch.setenv("REQUIRE_ROLE", "1")
+    for r in (client.post("/agents/requirements", json={"scenario": "A payroll system"}),
+              client.get(f"/runs/{run_id}"), client.get(f"/agents/srs/{run_id}"), client.get("/audit"),
+              act(run_id, "requirement", "FR-1", "accept", "")):
+        assert r.status_code == 400 and "X-Role header is required" in r.json()["detail"]
+    assert client.get(f"/runs/{run_id}", headers=H(AUD)).status_code == 200
+    assert client.get("/health").status_code == 200   # health and the UI page do not need a role
+
+
+def test_without_require_role_missing_headers_still_work(run_id, monkeypatch):
+    monkeypatch.delenv("REQUIRE_ROLE", raising=False)
+    assert client.get(f"/runs/{run_id}").status_code == 200
 
 
 def test_approval_actions_need_a_role(run_id):
@@ -250,7 +276,23 @@ def test_baseline_freeze_is_blocked_until_every_mandatory_item_is_approved(run_i
     blockers = r.json()["detail"]["blockers"]
     assert {(b["item_type"], b["item_id"]) for b in blockers} == {
         ("requirement", "FR-2"), ("requirement", "NFR-1"), ("requirement", "NFR-2"),
-        ("compliance", "FR-1/kyc_aml"), ("compliance", "FR-2/fair_lending"), ("sdlc", "sdlc")}
+        ("compliance", "FR-1/kyc_aml"), ("compliance", "FR-2/fair_lending")}
+
+
+def test_baseline_freezes_without_the_sdlc_selection_which_stays_pending(run_id):
+    for i in ("FR-1", "FR-2", "NFR-1"):
+        act(run_id, "requirement", i, "accept", PO)
+    act(run_id, "requirement", "NFR-2", "accept", SEC)
+    for i in ("FR-1/kyc_aml", "FR-2/fair_lending"):
+        act(run_id, "compliance", i, "accept", COMP)
+    act(run_id, "sdlc", "sdlc", "accept", PM)
+    d = client.post(f"/runs/{run_id}/baseline/freeze", headers=H(PO)).json()
+    assert d["baseline_status"] == "frozen"
+    s = client.get(f"/runs/{run_id}").json()
+    sdlc = next(i for i in s["items"] if i["item_type"] == "sdlc")
+    assert sdlc["status"] == "proposed" and sdlc["awaiting"] == sorted({ARCH, SEC, COMP})
+    table = client.get(f"/agents/srs/{run_id}").text.split("## 17. Approval status")[1]
+    assert "| SDLC model: V-Model | pending |" in table and "| Requirement baseline | frozen |" in table
 
 
 def test_baseline_freeze_roles_and_reopen_on_change(run_id):

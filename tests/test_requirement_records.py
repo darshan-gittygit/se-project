@@ -18,7 +18,7 @@ CTX = {"source_texts": [{"text": SCENARIO, "role": None},
 SECTION_8_KEYS = {
     "id", "requirement", "priority", "type", "categories", "source_stakeholder", "source_text",
     "business_justification", "dependencies", "assumptions", "acceptance_criteria",
-    "applicable_regulations", "risk_level", "confidence", "approval_status",
+    "applicable_regulations", "risk_level", "confidence", "approval_status", "source_document",
 }
 
 
