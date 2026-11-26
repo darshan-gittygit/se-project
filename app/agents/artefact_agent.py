@@ -73,6 +73,13 @@ class UseCase(_Linked):
     _lists = field_validator("preconditions", "main_flow", "alternative_flows", "postconditions")(
         classmethod(lambda cls, v: _clean_list(v)))
 
+    @field_validator("preconditions", "postconditions", mode="before")
+    @classmethod
+    def _one_string_is_one_item(cls, v):
+        # Live runs (2026-11-26) returned a single condition as a plain string, which cost a retry.
+        # Only these two fields, and only a string: blank strings still fail the blank-item check.
+        return [v] if isinstance(v, str) else v
+
 
 class ProcessStep(_Strict):
     actor: str = Field(min_length=1)
@@ -130,8 +137,9 @@ SECTION_RULES = {
                     'phrased to follow "I want", e.g. "to upload my documents"), "benefit" (the reason, phrased to follow "so that", '
                     'e.g. "my KYC check can start"; do not start it with "so that"), '
                     '"acceptance_criteria" (1-3, Given/When/Then), "requirement_ids".',
-    "use_cases": '- "use_cases": the main interactions. Fields: "name", "primary_actor", "preconditions", "main_flow" '
-                 '(at least 2 numbered steps as strings), "alternative_flows", "postconditions", "requirement_ids".',
+    "use_cases": '- "use_cases": the main interactions. Fields: "name", "primary_actor", "preconditions" (list of strings), '
+                 '"main_flow" (at least 2 numbered steps as strings), "alternative_flows" (list of strings), '
+                 '"postconditions" (list of strings), "requirement_ids".',
     "process_workflows": '- "process_workflows": end-to-end business processes. Fields: "name", "steps" (at least 2, each '
                          '{"actor", "action"}), "requirement_ids".',
     "data_requirements": '- "data_requirements": data the system stores. Fields: "entity", "description", "attributes", '

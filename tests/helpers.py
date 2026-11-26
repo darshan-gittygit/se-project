@@ -33,7 +33,9 @@ def risk_reply(ids=("FR-1",)):
     """A valid risk-register LLM reply linked to the given requirement ids."""
     return json.dumps({"risks": [risk("Bureau outage blocks scoring", 3, 4, ids),
                                  risk("Wrong decline reason", 2, 3, ids, "Compliance"),
-                                 risk("Slow page loads", 2, 2, ids, "Business")]})
+                                 risk("Slow page loads", 2, 2, ids, "Business"),
+                                 risk("Stolen session token", 2, 4, ids, "Security"),
+                                 risk("Support queue misses stuck applications", 2, 2, ids, "Operational")]})
 
 
 WORKFLOW_PROMPT_MARKER = "software development workflow to one project"

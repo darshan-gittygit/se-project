@@ -24,7 +24,13 @@ def scripted(*replies):
     return fake, calls
 
 
-THREE = {"risks": [risk("A", 2, 2), risk("B", 5, 4, ["FR-1", "NFR-1"], "Compliance"), risk("C", 3, 3, category="Security")]}
+FIVE = {"risks": [risk("A", 2, 2), risk("B", 5, 4, ["FR-1", "NFR-1"], "Compliance"), risk("C", 3, 3, category="Security"),
+                  risk("D", 1, 3, category="Operational"), risk("E", 2, 5, category="Business")]}
+
+
+def filler(n=3):
+    """n extra low risks so a reply reaches the 5-risk minimum."""
+    return [risk(f"filler {i}", 1, 1) for i in range(n)]
 
 
 def build(monkeypatch, reply, **kw):
@@ -34,15 +40,17 @@ def build(monkeypatch, reply, **kw):
 
 
 def test_score_level_rank_and_ids_are_computed_in_code(monkeypatch):
-    reg, _ = build(monkeypatch, THREE)
+    reg, _ = build(monkeypatch, FIVE)
     rows = reg["risks"]
     assert [(r["id"], r["rank"], r["description"], r["score"], r["level"]) for r in rows] == [
-        ("RISK-1", 1, "B", 20, "High"), ("RISK-2", 2, "C", 9, "Medium"), ("RISK-3", 3, "A", 4, "Low")]
+        ("RISK-1", 1, "B", 20, "High"), ("RISK-2", 2, "E", 10, "High"), ("RISK-3", 3, "C", 9, "Medium"),
+        ("RISK-4", 4, "A", 4, "Low"), ("RISK-5", 5, "D", 3, "Low")]
     assert set(rows[0]) == {"id", "rank", "description", "category", "likelihood", "likelihood_reason", "impact",
                             "impact_reason", "score", "level", "mitigation", "linked_requirement_ids"}
-    assert reg["summary"] == {"count": 3, "by_level": {"High": 1, "Medium": 1, "Low": 1},
-                              "likelihood_distribution": {"1": 0, "2": 1, "3": 1, "4": 0, "5": 1},
-                              "impact_distribution": {"1": 0, "2": 1, "3": 1, "4": 1, "5": 0}}
+    assert reg["summary"] == {"count": 5, "by_level": {"High": 2, "Medium": 1, "Low": 2},
+                              "likelihood_distribution": {"1": 1, "2": 2, "3": 1, "4": 0, "5": 1},
+                              "impact_distribution": {"1": 0, "2": 1, "3": 2, "4": 1, "5": 1}}
+    assert rows[4]["category"] == "Operational"
 
 
 @pytest.mark.parametrize("score, level", [(1, "Low"), (4, "Low"), (5, "Medium"), (9, "Medium"), (10, "High"), (25, "High")])
@@ -51,13 +59,13 @@ def test_level_bands(score, level):
 
 
 def test_equal_scores_rank_by_impact_then_likelihood(monkeypatch):
-    reg, _ = build(monkeypatch, {"risks": [risk("low impact", 4, 2), risk("high impact", 2, 4), risk("other", 1, 1)]})
-    assert [r["description"] for r in reg["risks"]] == ["high impact", "low impact", "other"]
+    reg, _ = build(monkeypatch, {"risks": [risk("low impact", 4, 2), risk("high impact", 2, 4)] + filler()})
+    assert [r["description"] for r in reg["risks"]][:2] == ["high impact", "low impact"]
 
 
 def test_model_supplied_score_id_and_level_are_ignored(monkeypatch):
     sneaky = dict(risk("A", 1, 2), score=25, level="High", id="RISK-99")
-    reg, _ = build(monkeypatch, {"risks": [sneaky, risk("B", 1, 1), risk("C", 1, 3)]})
+    reg, _ = build(monkeypatch, {"risks": [sneaky, risk("B", 1, 1), risk("C", 1, 3)] + filler(2)})
     a = next(r for r in reg["risks"] if r["description"] == "A")
     assert a["score"] == 2 and a["level"] == "Low" and a["id"] != "RISK-99"
 
@@ -67,7 +75,7 @@ def test_prompt_carries_rubrics_gaps_and_quality_flags(monkeypatch):
                                  "review_reasons": ["kyc_aml: low-confidence match (distance 0.58)"],
                                  "mappings": [{"status": "gap", "source": "kyc_aml", "compliance_gap": "No address check."}]}]}
     quality = {"flags": [{"type": "conflict", "requirement_ids": ["FR-1", "NFR-1"], "reason": "cannot both hold"}]}
-    _, calls = build(monkeypatch, THREE, scenario="A loan system.", compliance_mapping=mapping, quality=quality)
+    _, calls = build(monkeypatch, FIVE, scenario="A loan system.", compliance_mapping=mapping, quality=quality)
     p = calls[0]
     assert "4 = Likely: the input itself points to it" in p and "5 = Severe" in p
     assert "FR-1: gap against kyc_aml: No address check." in p
@@ -78,18 +86,18 @@ def test_prompt_carries_rubrics_gaps_and_quality_flags(monkeypatch):
 
 
 @pytest.mark.parametrize("bad", [
-    {"risks": [risk("A", 1, 1), risk("B", 1, 1)]},                                    # fewer than 3
-    {"risks": [risk(str(i), 1, 1) for i in range(11)]},                               # more than 10
-    {"risks": [risk("A", 0, 2), risk("B", 1, 1), risk("C", 1, 1)]},                   # likelihood 0
-    {"risks": [risk("A", 6, 2), risk("B", 1, 1), risk("C", 1, 1)]},                   # likelihood 6
-    {"risks": [risk("A", "3", 2), risk("B", 1, 1), risk("C", 1, 1)]},                 # string score
-    {"risks": [risk("A", 3.5, 2), risk("B", 1, 1), risk("C", 1, 1)]},                 # fractional
-    {"risks": [risk("A", 2, 2, ["FR-9"]), risk("B", 1, 1), risk("C", 1, 1)]},         # unknown requirement
-    {"risks": [risk("A", 2, 2, []), risk("B", 1, 1), risk("C", 1, 1)]},               # no link
-    {"risks": [risk("A", 2, 2, category="Reputational"), risk("B", 1, 1), risk("C", 1, 1)]},
-    {"risks": [dict(risk("A", 2, 2), mitigation=""), risk("B", 1, 1), risk("C", 1, 1)]},
-    {"risks": [dict(risk("A", 2, 2), impact={"score": 2, "reason": " "}), risk("B", 1, 1), risk("C", 1, 1)]},
-    {"risks": [risk("Same", 2, 2), risk("same", 1, 1), risk("C", 1, 1)]},             # repeated
+    {"risks": [risk(str(i), 1, 1) for i in range(4)]},                                # fewer than 5
+    {"risks": [risk(str(i), 1, 1) for i in range(9)]},                                # more than 8
+    {"risks": [risk("A", 0, 2)] + filler(4)},                                         # likelihood 0
+    {"risks": [risk("A", 6, 2)] + filler(4)},                                         # likelihood 6
+    {"risks": [risk("A", "3", 2)] + filler(4)},                                       # string score
+    {"risks": [risk("A", 3.5, 2)] + filler(4)},                                       # fractional
+    {"risks": [risk("A", 2, 2, ["FR-9"])] + filler(4)},                               # unknown requirement
+    {"risks": [risk("A", 2, 2, [])] + filler(4)},                                     # no link
+    {"risks": [risk("A", 2, 2, category="Reputational")] + filler(4)},
+    {"risks": [dict(risk("A", 2, 2), mitigation="")] + filler(4)},
+    {"risks": [dict(risk("A", 2, 2), impact={"score": 2, "reason": " "})] + filler(4)},
+    {"risks": [risk("Same", 2, 2), risk("same", 1, 1)] + filler(3)},                  # repeated
 ])
 def test_invalid_register_is_rejected(bad):
     with pytest.raises(ValueError):
@@ -97,15 +105,31 @@ def test_invalid_register_is_rejected(bad):
 
 
 def test_category_case_is_normalised(monkeypatch):
-    reg, _ = build(monkeypatch, {"risks": [risk("A", 1, 1, category="compliance"), risk("B", 1, 1), risk("C", 1, 1)]})
-    assert {r["category"] for r in reg["risks"]} == {"Compliance", "Technical"}
+    reg, _ = build(monkeypatch, {"risks": [risk("A", 1, 1, category="compliance"), risk("B", 1, 1, category="OPERATIONAL")]
+                                 + filler()})
+    assert {r["category"] for r in reg["risks"]} == {"Compliance", "Operational", "Technical"}
 
 
 def test_retry_then_recover(monkeypatch):
-    fake, calls = scripted({"risks": [risk("A", 9, 1)]}, THREE)
+    fake, calls = scripted({"risks": [risk("A", 9, 1)]}, FIVE)
     monkeypatch.setattr(ra, "generate_text", fake)
-    assert ra.build_risk_register("Loans", REQS)["summary"]["count"] == 3 and len(calls) == 2
+    assert ra.build_risk_register("Loans", REQS)["summary"]["count"] == 5 and len(calls) == 2
     assert "rejected" in calls[1]
+
+
+def test_valid_register_sizes_are_five_to_eight():
+    ctx = {"requirement_ids": {"FR-1", "NFR-1"}}
+    for n in (5, 8):
+        assert len(ra.RiskOutput.model_validate({"risks": [risk(str(i), 1, 1) for i in range(n)]}, context=ctx).risks) == n
+
+
+def test_prompt_asks_for_five_to_eight_grounded_risks_including_operational(monkeypatch):
+    _, calls = build(monkeypatch, FIVE)
+    p = calls[0]
+    assert "List 5-8 distinct risks" in p and "operational risks of running the system" in p
+    assert "do not invent risks unrelated to the requirements to reach the count" in p
+    assert '"Operational"' in p
+    assert ra.LIKELIHOOD_RUBRIC in p and ra.IMPACT_RUBRIC in p      # the rubrics are unchanged
 
 
 # --- pipeline: retry then 502 ----------------------------------------------------

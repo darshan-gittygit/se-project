@@ -10,7 +10,14 @@ Validated by RiskOutput (retry once, then LLMOutputError).
 
 Categories: the statement's business, technical and compliance risks, plus
 "Security" because the register is a threat register (section 12) and
-section 11 pairs compliance with security analysis.
+section 11 pairs compliance with security analysis, and "Operational"
+(running the system: support, monitoring, data quality, manual steps).
+
+5-8 risks per project. With 3-10 allowed, live loan runs returned 3-5 risks,
+all or mostly High: the model listed only the most serious threats. Asking
+for 5-8 and naming operational risks makes room for lower-severity risks
+that genuinely exist; the rubrics are unchanged, and every risk must still
+link to the requirements it concerns.
 """
 from typing import Literal
 
@@ -21,8 +28,8 @@ from app.prompt_safety import DATA_RULE, untrusted
 from app.schemas import _NonEmptyText, _ctx, generate_validated
 from app.vocabulary import canonical
 
-RISK_CATEGORIES = ("Business", "Technical", "Compliance", "Security")
-MIN_RISKS, MAX_RISKS = 3, 10
+RISK_CATEGORIES = ("Business", "Technical", "Compliance", "Security", "Operational")
+MIN_RISKS, MAX_RISKS = 5, 8
 
 # Score bands on the 1-25 likelihood x impact scale.
 LEVEL_BANDS = (("High", 10), ("Medium", 5), ("Low", 1))
@@ -101,7 +108,7 @@ Compliance gaps (controls the requirements do not yet meet):
 Quality flags (ambiguity, untestable, duplicate, conflict):
 {quality}
 
-List {min_risks}-{max_risks} distinct risks to this project: business, technical, compliance and security risks where they apply. Each risk must be specific to this project and linked to the requirement ids it threatens or depends on. Rate likelihood and impact separately with these anchors, and give a one-sentence reason for each rating that points to the input:
+List {min_risks}-{max_risks} distinct risks to this project. Cover business, technical, compliance and security risks, and include operational risks of running the system (support, monitoring, data quality, manual steps) where they genuinely exist; these are often of lower severity, which is fine. Every risk must come from the requirements, compliance gaps or quality flags above and be linked to the requirement ids it threatens or depends on: do not invent risks unrelated to the requirements to reach the count, and do not repeat one risk in different words. Rate likelihood and impact separately with these anchors, and give a one-sentence reason for each rating that points to the input:
 
 {likelihood}
 
@@ -110,7 +117,7 @@ List {min_risks}-{max_risks} distinct risks to this project: business, technical
 Use the full scales: most projects have risks at several different levels, and a regulated domain is not by itself a reason for the highest scores. Do not name laws or regulations that the input does not mention. Give one concrete mitigation per risk.
 
 Respond with ONLY valid JSON, no markdown fences, in exactly this schema:
-{{"risks": [{{"description": "...", "category": "Business" | "Technical" | "Compliance" | "Security",
+{{"risks": [{{"description": "...", "category": "Business" | "Technical" | "Compliance" | "Security" | "Operational",
   "likelihood": {{"score": 1-5, "reason": "..."}}, "impact": {{"score": 1-5, "reason": "..."}},
   "mitigation": "...", "linked_requirement_ids": ["FR-1"]}}]}}
 """

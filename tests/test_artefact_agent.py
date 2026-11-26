@@ -88,6 +88,17 @@ def test_story_text_is_kept_when_it_only_starts_with_a_lead_word(monkeypatch):
     assert out["user_stories"][1]["benefit"] == "so that"                    # nothing left to keep: unchanged
 
 
+def test_use_case_conditions_given_as_one_string_become_one_item_lists(monkeypatch):
+    # live runs (2026-11-26): "preconditions": "Score computed" cost a validation retry
+    uc = use_case(preconditions="  Credit score computed ", postconditions="Applicant informed")
+    out, calls = run(monkeypatch, dict(GOOD, use_cases=[uc]))
+    assert len(calls) == 1                                                   # accepted first time, no retry
+    assert out["use_cases"][0]["preconditions"] == ["Credit score computed"]
+    assert out["use_cases"][0]["postconditions"] == ["Applicant informed"]
+    p = calls[0]
+    assert '"preconditions" (list of strings)' in p and '"postconditions" (list of strings)' in p
+
+
 def test_empty_optional_sections_are_allowed(monkeypatch):
     out, _ = run(monkeypatch, dict(GOOD, process_workflows=[], data_requirements=[], interface_requirements=[]))
     assert out["process_workflows"] == [] and out["interface_requirements"] == []
@@ -106,6 +117,12 @@ BAD = [
     dict(GOOD, process_workflows=[dict(GOOD["process_workflows"][0], steps=[{"actor": "A", "action": "x", "time": 1},
                                                                               {"actor": "B", "action": "y"}])]),
     {k: v for k, v in GOOD.items() if k != "user_stories"},                                 # missing section
+    # only preconditions/postconditions accept a plain string; nothing else is loosened:
+    dict(GOOD, use_cases=[use_case(preconditions=" ")]),                                    # blank string
+    dict(GOOD, use_cases=[use_case(main_flow="Officer declines, then the system sends the reason")]),
+    dict(GOOD, use_cases=[use_case(alternative_flows="Score unavailable")]),
+    dict(GOOD, use_cases=[use_case(preconditions={"text": "Score computed"})]),
+    dict(GOOD, user_stories=[story(acceptance_criteria="Given x, when y, then z"), story(("FR-2",))]),
 ]
 
 
