@@ -145,6 +145,26 @@ def test_gap_on_a_high_risk_requirement_needs_compliance_approval(monkeypatch):
         "kyc_aml: compliance gap on a high-risk requirement; the interpretation needs compliance or legal approval"]
 
 
+def test_requirement_specific_finding_beats_a_broad_one_for_the_same_source(monkeypatch):
+    # live run (2026-11-26): a project-wide fairness gap listing four requirements came first and hid FR-5's own
+    # "satisfied" finding for the same source
+    broad = finding(["FR-1", "FR-2"], "fair_lending", status="gap", gap="No periodic fairness review.",
+                    evidence="should generally receive a reason for the decision", note="broad")
+    specific = finding(["FR-2"], "fair_lending", evidence="should generally receive a reason for the decision", note="own")
+    d, _ = run(monkeypatch, [broad, specific, GOOD[0]])
+    fr2 = [m for m in entry(d, "FR-2")["mappings"] if m["source"] == "fair_lending"]
+    assert len(fr2) == 1 and fr2[0]["status"] == "satisfied" and fr2[0]["required_control"] == "own"
+    fr1 = {m["source"]: m for m in entry(d, "FR-1")["mappings"]}
+    assert fr1["fair_lending"]["required_control"] == "broad" and fr1["kyc_aml"]["status"] == "satisfied"
+
+
+def test_equally_specific_findings_keep_the_model_order(monkeypatch):
+    first = finding(["FR-2"], "fair_lending", status="gap", gap="g1", evidence=GOOD[1]["evidence"], note="first")
+    second = finding(["FR-2"], "fair_lending", evidence=GOOD[1]["evidence"], note="second")
+    d, _ = run(monkeypatch, [GOOD[0], first, second])
+    assert [m["required_control"] for m in entry(d, "FR-2")["mappings"]] == ["first"]
+
+
 def test_gap_on_a_medium_risk_requirement_with_good_evidence_is_not_escalated(monkeypatch):
     d, _ = run(monkeypatch, GOOD[:1] + [finding(["FR-2"], "fair_lending", status="gap", gap="No reason text.",
                                                 evidence=GOOD[1]["evidence"])] + GOOD[2:])

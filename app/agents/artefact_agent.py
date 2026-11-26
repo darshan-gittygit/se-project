@@ -127,7 +127,8 @@ class AllArtefacts(PartStories, PartModels):
 
 SECTION_RULES = {
     "user_stories": '- "user_stories": at least one per functional requirement. Fields: "role" (who), "goal" (what they want, '
-                    'phrased to follow "I want", e.g. "to upload my documents"), "benefit" (so that ...), '
+                    'phrased to follow "I want", e.g. "to upload my documents"), "benefit" (the reason, phrased to follow "so that", '
+                    'e.g. "my KYC check can start"; do not start it with "so that"), '
                     '"acceptance_criteria" (1-3, Given/When/Then), "requirement_ids".',
     "use_cases": '- "use_cases": the main interactions. Fields: "name", "primary_actor", "preconditions", "main_flow" '
                  '(at least 2 numbered steps as strings), "alternative_flows", "postconditions", "requirement_ids".',
@@ -174,13 +175,29 @@ def _call(schema, kinds, requirements, scenario, context):
     return generate_validated(prompt, schema, generate=generate_text, temperature=0.2, context=context).model_dump()
 
 
+def _strip_lead(text: str, leads: tuple[str, ...]) -> str:
+    """Removes lead-in words the story template adds itself ("so that", "I want", "as a"), and a trailing period."""
+    out = text.strip()
+    changed = True
+    while changed:
+        changed = False
+        for lead in leads:
+            if out.lower().startswith(lead + " ") and len(out) > len(lead) + 1:
+                out, changed = out[len(lead) + 1:].lstrip(" ,"), True
+    return out.rstrip(" .")
+
+
 def _finish(kind: str, items: list[dict], requirements: dict) -> list[dict]:
     out = []
     for i, item in enumerate(items, start=1):
         row = {"id": f"{ID_PREFIX[kind]}-{i}", **item}
         if kind == "user_stories":
-            article = "an" if item["role"][:1].lower() in "aeiou" else "a"
-            row["story"] = f"As {article} {item['role']}, I want {item['goal']}, so that {item['benefit']}."
+            # The model sometimes repeats the template's own words ("so that so that ..."), seen in a live run.
+            row["role"] = _strip_lead(item["role"], ("as a", "as an", "a", "an"))
+            row["goal"] = _strip_lead(item["goal"], ("i want", "i would like"))
+            row["benefit"] = _strip_lead(item["benefit"], ("so that",))
+            article = "an" if row["role"][:1].lower() in "aeiou" else "a"
+            row["story"] = f"As {article} {row['role']}, I want {row['goal']}, so that {row['benefit']}."
         row["source_statements"] = source_statements(item["requirement_ids"], requirements)
         out.append(row)
     return out

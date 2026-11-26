@@ -71,6 +71,23 @@ def test_story_article_follows_the_role(monkeypatch):
     assert out["user_stories"][1]["story"].startswith("As a credit officer,")
 
 
+def test_story_does_not_repeat_the_template_words(monkeypatch):
+    # live run (2026-11-26): the model wrote benefit "so that I can apply ..." -> "so that so that I can apply"
+    stories = [story(role="As a loan applicant", goal="I want to upload my documents", benefit="so that my KYC check can start."),
+               story(("FR-2",), role="an auditor", goal="to see the reason", benefit="So that I understand the decision")]
+    out, calls = run(monkeypatch, dict(GOOD, user_stories=stories))
+    assert out["user_stories"][0]["story"] == "As a loan applicant, I want to upload my documents, so that my KYC check can start."
+    assert out["user_stories"][1]["story"] == "As an auditor, I want to see the reason, so that I understand the decision."
+    assert out["user_stories"][0]["benefit"] == "my KYC check can start" and out["user_stories"][1]["role"] == "auditor"
+    assert 'do not start it with "so that"' in calls[0]
+
+
+def test_story_text_is_kept_when_it_only_starts_with_a_lead_word(monkeypatch):
+    out, _ = run(monkeypatch, dict(GOOD, user_stories=[story(role="analyst"), story(("FR-2",), role="a", benefit="so that")]))
+    assert out["user_stories"][0]["story"].startswith("As an analyst,")      # "an" inside a word is not a lead word
+    assert out["user_stories"][1]["benefit"] == "so that"                    # nothing left to keep: unchanged
+
+
 def test_empty_optional_sections_are_allowed(monkeypatch):
     out, _ = run(monkeypatch, dict(GOOD, process_workflows=[], data_requirements=[], interface_requirements=[]))
     assert out["process_workflows"] == [] and out["interface_requirements"] == []

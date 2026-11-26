@@ -112,7 +112,11 @@ def build_mapping(requirements: list[dict], considerations: list[dict], chunks: 
     cands = candidate_pairs(chunks)
     by_req = {r["id"]: [] for r in requirements}
     covered = set()
-    for c in considerations:
+    # One item per (requirement, source). When several considerations cite the same source for a requirement,
+    # the most specific one (fewest linked requirements) is used, so a finding written for this requirement is
+    # not hidden by a broad one that merely lists it (seen in a live run: a project-wide fairness gap listed
+    # FR-5 and replaced FR-5's own "satisfied" finding). Ties keep the model's order.
+    for c in sorted(considerations, key=lambda c: len(c["related_requirement_ids"])):
         for rid in c["related_requirement_ids"]:
             if rid in by_req and (rid, c["source"]) not in covered:
                 covered.add((rid, c["source"]))
