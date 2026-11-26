@@ -69,7 +69,7 @@ Plain HTML, CSS and JavaScript in `app/static/` (no framework, no build step; ch
 - **Approvals:** accept / reject / modify / regenerate buttons on each item, blocking items, decision history and "Freeze baseline". 403 and 409 answers are shown as plain messages.
 - **Audit log** (auditor and compliance officer): filter by run, role and action; shows whether the hash chain verifies.
 - **Reloading** keeps a live run: its id is in the address (`#run=<id>`) and is reopened from the database.
-- **Load recorded sample:** shows `app/static/sample_run.json`, labelled "Recorded sample, not a live run", with no model calls (useful when the quota is used up). It was produced offline by `python -m scripts.make_sample_run` from mocked model replies and real knowledge-base paragraphs; replace it with a recorded live run before a demo. Approvals are disabled in sample mode because nothing is stored.
+- **Load recorded sample:** shows `app/static/sample_run.json`, labelled "Recorded sample, not a live run", with no model calls (useful when the quota is used up). It is a recorded live loan run (gemini-3.5-flash-lite), built with `python -m scripts.make_sample_run --from-live <saved response.json>`, which refuses unmasked personal data or key-like text. Approvals are disabled in sample mode because nothing is stored.
 
 ## Tests
 

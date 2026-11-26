@@ -166,3 +166,20 @@ def test_sdlc_endpoint_retries_bad_justification(monkeypatch):
     r = client.post("/agents/sdlc", json=BODY)
     assert r.status_code == 200
     assert r.json()["justification"]["key_tradeoffs"] == "Rigid."
+
+
+def test_track_retries_records_reason_text_only():
+    from pydantic import BaseModel
+
+    from app.schemas import generate_validated, track_retries
+
+    class Out(BaseModel):
+        n: int
+
+    replies = iter(['{"n": "secret reply text"}', '{"n": 2}'])
+    with track_retries() as log:
+        assert generate_validated("p", Out, generate=lambda p, temperature: next(replies), temperature=0).n == 2
+    assert [(r["schema"], r["attempt"]) for r in log] == [("Out", 1)] and "n" in log[0]["reason"]
+    replies = iter(['{"n": "x"}', '{"n": 2}'])
+    generate_validated("p", Out, generate=lambda p, temperature: next(replies), temperature=0)   # outside: not collected
+    assert len(log) == 1

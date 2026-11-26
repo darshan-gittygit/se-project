@@ -11,7 +11,9 @@ from the validation context:
 
 Existing response keys are never renamed or removed; new keys are additive.
 """
+import contextvars
 import re
+from contextlib import contextmanager
 from typing import Callable, Literal
 
 from pydantic import BaseModel, Field, StrictInt, ValidationError, ValidationInfo, field_validator, model_validator
@@ -335,6 +337,24 @@ def describe_error(exc: Exception) -> str:
     return "the response was not valid JSON"
 
 
+_retry_log: contextvars.ContextVar[list | None] = contextvars.ContextVar("requora_retry_log", default=None)
+
+
+@contextmanager
+def track_retries():
+    """
+    Collects one record per rejected model answer inside the block:
+    {"schema", "attempt", "reason"} - the validation reason text only, never the
+    answer itself. main.py masks it and adds it to the stage's audit event.
+    """
+    log: list[dict] = []
+    token = _retry_log.set(log)
+    try:
+        yield log
+    finally:
+        _retry_log.reset(token)
+
+
 def generate_validated(
     prompt: str,
     schema: type[BaseModel],
@@ -350,7 +370,7 @@ def generate_validated(
     into a 502). `generate` is passed in so tests can mock each agent's call.
     """
     current, error = prompt, ""
-    for _ in range(MAX_ATTEMPTS):
+    for attempt in range(1, MAX_ATTEMPTS + 1):
         raw = generate(current, temperature=temperature)
         try:
             parsed = schema.model_validate(parse_json_response(raw), context=context)
@@ -360,5 +380,8 @@ def generate_validated(
             return parsed
         except ValueError as exc:  # pydantic's ValidationError is a ValueError
             error = describe_error(exc)
+            log = _retry_log.get()
+            if log is not None:
+                log.append({"schema": schema.__name__, "attempt": attempt, "reason": error[:1000]})
             current = prompt + RETRY_NOTE.format(error=error)
     raise LLMOutputError(f"model output failed validation after {MAX_ATTEMPTS} attempts: {error}")

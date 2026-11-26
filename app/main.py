@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from app.agents.interview_agent import DEFAULT_MAX_QUESTIONS, next_questions
 from app.agents.interview_templates import TEMPLATES
 from app.gemini_client import track_calls, track_models
+from app.schemas import track_retries
 from app.vocabulary import INTERVIEW_TOPICS, STAKEHOLDER_ROLES
 from app import config
 from app.config import STATIC_DIR
@@ -213,12 +214,18 @@ def _invalid(request, exc):
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
+def _retry_details(retries: list[dict], guard: Guard) -> dict:
+    """Why model answers were rejected and retried (masked reason text only); empty when none were."""
+    return {"validation_retries": guard.output(retries)} if retries else {}
+
+
 def _audit_stage(stage: str, role: str, calls: list[dict], output, guard: Guard, run_id: str | None = None,
-                 extra: dict | None = None):
-    """One audit event per stage run: prompt hashes, models, retrieved chunk ids (if any) and the masked output."""
+                 extra: dict | None = None, retries: list[dict] | None = None):
+    """One audit event per stage run: prompt hashes, models, retrieved chunk ids (if any), retry reasons and the masked output."""
     append_event("stage_run", role, run_id=run_id, stage=stage,
                  model=", ".join(dict.fromkeys(c["model"] for c in calls)) or None,
-                 details={"prompts": calls, "output": guard.output(output), **(extra or {})})
+                 details={"prompts": calls, "output": guard.output(output), **_retry_details(retries or [], guard),
+                          **(extra or {})})
 
 
 def _chunk_ids(compliance_result: dict) -> list[str]:
@@ -227,13 +234,15 @@ def _chunk_ids(compliance_result: dict) -> list[str]:
 
 def _single_stage(stage: str, role: str, error_prefix: str, fn, guard: Guard, extra=None):
     """Runs one stage for a single-stage endpoint (inputs already masked by `guard`), with meta and an audit event."""
-    try:
-        with track_models() as used, track_calls() as calls:
-            result = fn()
-    except Exception as e:
-        append_event("stage_failed", role, stage=stage, details={"error": guard.output(str(e))[:2000]})
-        raise HTTPException(status_code=502, detail=f"{error_prefix}: {e}")
-    _audit_stage(stage, role, calls, result, guard, extra=extra(result) if extra else None)
+    with track_retries() as retries:
+        try:
+            with track_models() as used, track_calls() as calls:
+                result = fn()
+        except Exception as e:
+            append_event("stage_failed", role, stage=stage, details={"error": guard.output(str(e))[:2000],
+                                                                     **_retry_details(retries, guard)})
+            raise HTTPException(status_code=502, detail=f"{error_prefix}: {e}")
+    _audit_stage(stage, role, calls, result, guard, extra=extra(result) if extra else None, retries=retries)
     result = guard.output(result)
     result["meta"] = _meta(used)
     result["masking"] = guard.report()
@@ -362,16 +371,17 @@ def run_full_pipeline(body: ScenarioRequest, artefacts: bool = Query(True, descr
                           "answers": len(answers), "documents": [d["filename"] for d in documents],
                           "artefacts": artefacts, "masking": guard.report(), **_versions()})
 
-    with track_models() as used, track_calls() as calls:
+    with track_models() as used, track_calls() as calls, track_retries() as retries:
         def stage(name, error_prefix, fn, extra=None):
-            before = len(calls)
+            before, before_r = len(calls), len(retries)
             try:
                 out = fn()
             except Exception as e:
                 append_event("pipeline_failed", role, run_id=run_id, stage=name,
-                             details={"error": guard.output(str(e))[:2000]})
+                             details={"error": guard.output(str(e))[:2000], **_retry_details(retries[before_r:], guard)})
                 raise HTTPException(status_code=502, detail=f"{error_prefix}: {e}")
-            _audit_stage(name, role, calls[before:], out, guard, run_id=run_id, extra=extra(out) if extra else None)
+            _audit_stage(name, role, calls[before:], out, guard, run_id=run_id, extra=extra(out) if extra else None,
+                         retries=retries[before_r:])
             return out
 
         requirements = stage("requirements", "Agent 1 failed", lambda: extract_requirements(scenario, answers, documents))

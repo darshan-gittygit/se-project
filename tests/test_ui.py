@@ -175,9 +175,11 @@ def test_sample_has_no_secrets_or_unmasked_personal_data(sample):
     if env.exists():
         for line in env.read_text(encoding="utf-8").splitlines():
             if "=" in line and not line.lstrip().startswith("#"):
-                value = line.split("=", 1)[1].strip().strip('"\'')
-                if len(value) >= 12:
-                    assert value not in text
+                name, value = line.split("=", 1)
+                value = value.strip().strip('"\'')
+                # secret-looking settings only: a recorded live run legitimately names the model (GEMINI_MODEL)
+                if re.search(r"KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL", name.upper()) and len(value) >= 8:
+                    assert value not in text, f"{name.strip()} value found in the sample"
     assert sample["masking"]["total"] >= 1 and "[EMAIL_1]" in sample["scenario"]
 
 

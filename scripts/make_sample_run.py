@@ -5,7 +5,8 @@ mocked with the test fixture's data (tests/artefact_fixtures.py), retrieval
 returns real knowledge-base paragraphs, and a throwaway database is used.
 So the file has exactly the shape the API returns, with no live model call.
 
-    python -m scripts.make_sample_run
+    python -m scripts.make_sample_run                         # offline, from the test fixture's data
+    python -m scripts.make_sample_run --from-live run.json    # from a saved live /agents/pipeline response
 
 It contains no secrets and no real personal data: the scenario's only
 "personal" values are an example.com address and the public 4111... test
@@ -17,6 +18,7 @@ import os
 import re
 import sys
 import tempfile
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -196,7 +198,50 @@ def router(prompt, temperature=0.3):
     raise AssertionError("unexpected prompt: " + prompt[:80])
 
 
+LABEL = "Recorded sample, not a live run"
+
+
+def check_shareable(result: dict) -> None:
+    """Refuses to write a sample that still holds a key or unmasked personal data."""
+    from app.config import GEMINI_API_KEY
+    from app.masking import detect
+    text = json.dumps(result, ensure_ascii=False)
+    found = detect(text)
+    if found:
+        raise SystemExit(f"refused: unmasked sensitive data in the result {found}")
+    if "AIza" in text or "PRIVATE KEY" in text or (len(GEMINI_API_KEY) >= 8 and GEMINI_API_KEY in text):
+        raise SystemExit("refused: the result contains something that looks like an API key")
+
+
+def from_live(path: Path, out: Path = OUT) -> None:
+    """
+    Builds the sample from a saved live /agents/pipeline response (the raw JSON body, or a
+    wrapper with the body under "body" plus "secs"). The result is kept exactly as recorded -
+    inputs were masked by the app before any model call - and only labelled.
+    """
+    saved = json.loads(Path(path).read_text(encoding="utf-8"))
+    result = saved.get("body", saved)
+    missing = [k for k in ("requirements", "compliance_mapping", "risk_register", "sdlc_recommendation",
+                           "sdlc_workflow", "artefacts", "masking", "versions") if k not in result]
+    if missing:
+        raise SystemExit(f"refused: not a full pipeline response (missing {', '.join(missing)})")
+    check_shareable(result)
+    models = ", ".join(result["versions"].get("models") or []) or "unknown model"
+    when = saved.get("recorded_at") or date.fromtimestamp(Path(path).stat().st_mtime).isoformat()
+    took = f"; the request took {saved['secs']} s" if "secs" in saved else ""
+    result["_sample"] = {"label": LABEL,
+                         "note": f"Recorded from a live /agents/pipeline run on {when} ({models}{took}). Loading it "
+                                 "calls no model; approvals are disabled because the run is not stored on this server."}
+    out.write_text(json.dumps(result, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"Wrote {out} ({out.stat().st_size // 1024} KB) from {path}; "
+          f"recommended model {result['sdlc_recommendation']['recommended_model']}")
+
+
 def main():
+    if "--from-live" in sys.argv:
+        i = sys.argv.index("--from-live")
+        out = Path(sys.argv[sys.argv.index("--out") + 1]) if "--out" in sys.argv else OUT
+        return from_live(Path(sys.argv[i + 1]), out)
     for mod in (ra, ca, qa, rk, sa, wa, aa):
         mod.generate_text = router
     ca.retrieve_many = fake_retrieve
@@ -206,7 +251,7 @@ def main():
                                   "answer": "Loans above the bank's risk threshold need a second approver."}]})
     assert r.status_code == 200, r.text
     result = r.json()
-    result["_sample"] = {"label": "Recorded sample, not a live run",
+    result["_sample"] = {"label": LABEL,
                          "note": "Generated offline by scripts/make_sample_run.py from the test fixture's data with mocked "
                                  "model replies and real knowledge-base paragraphs. Replace it with a recorded live run."}
     OUT.write_text(json.dumps(result, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")

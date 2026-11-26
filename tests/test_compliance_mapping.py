@@ -215,3 +215,11 @@ def test_compliance_endpoint_returns_the_mapping(monkeypatch):
     d = client.post("/agents/compliance", json=BODY).json()
     assert d["compliance_mapping"]["requirements"][0]["mappings"][0]["confidence"] == "High"
     assert {"risk_level", "kb_relevance", "considerations", "summary", "sources_consulted", "sources_used"} <= set(d)
+
+
+def test_prompt_tells_the_model_to_link_only_the_requirements_a_finding_is_about(monkeypatch):
+    # live run (2026-11-26): one project-wide fairness gap was linked to four requirements, two of them unrelated
+    _, calls = run(monkeypatch, GOOD)
+    p = calls[0]
+    assert "Link a consideration only to the requirements it is actually about" in p
+    assert "does not mean the consideration concerns all of them" in p

@@ -1,38 +1,67 @@
 {
- "scenario": "A digital loan origination system for a mid-sized bank. Applicants upload identity and address documents for KYC verification, and declined applicants must be told the reason. Support questions go to [EMAIL_1]; fees are charged to test card [CARD_1].",
+ "scenario": "A digital loan origination system for a mid-sized Indian bank. Applicants apply online for personal loans and upload identity and address documents for KYC verification. The system calculates a credit score from credit bureau data and declared income. Loans above the bank's risk threshold need a second approver, declined applicants must be told the reason, and every verification and credit decision must be kept for audit. Support questions go to [EMAIL_1]; processing fees are charged to test card [CARD_1].",
  "answers": [
   {
    "role": "Risk-management teams",
    "question": "What limits apply?",
-   "answer": "Loans above the bank's risk threshold need a second approver.",
+   "answer": "Loans above the bank's risk threshold need a second approver, and the threshold is reviewed every quarter.",
    "question_id": null,
    "topic": null
   }
  ],
  "documents": [],
  "requirements": {
-  "domain_inferred": "Digital Loan Origination",
+  "domain_inferred": "Digital Loan Origination System",
   "assumptions": [
-   "Credit bureau API is available"
+   "KYC verification includes identity and address document validation",
+   "Credit bureau data is retrieved via a third-party API integration"
   ],
   "functional_requirements": [
    {
     "id": "FR-1",
-    "requirement": "The system shall verify applicant identity documents.",
+    "requirement": "The system shall allow applicants to submit online personal loan applications.",
     "priority": "High",
     "type": "FR",
     "categories": [
      "Functional",
+     "Business"
+    ],
+    "source_stakeholder": "Customers and end users",
+    "source_text": "Applicants apply online for personal loans",
+    "source_document": null,
+    "business_justification": "Online applications form the core entry point for the loan origination revenue stream.",
+    "dependencies": [],
+    "assumptions": [],
+    "acceptance_criteria": [
+     "Applicants can complete and submit the online application form with personal and financial details",
+     "The system generates a unique application reference number upon successful submission"
+    ],
+    "applicable_regulations": [],
+    "risk_level": "Medium",
+    "confidence": "High",
+    "approval_status": "proposed"
+   },
+   {
+    "id": "FR-2",
+    "requirement": "The system shall allow applicants to upload identity and address documents for KYC verification.",
+    "priority": "High",
+    "type": "FR",
+    "categories": [
+     "Functional",
+     "Security",
      "Regulatory"
     ],
     "source_stakeholder": "Compliance and legal officers",
     "source_text": "upload identity and address documents for KYC verification",
     "source_document": null,
-    "business_justification": "KYC is mandatory.",
-    "dependencies": [],
+    "business_justification": "Document upload is mandatory to satisfy regulatory KYC compliance requirements.",
+    "dependencies": [
+     "FR-1"
+    ],
     "assumptions": [],
     "acceptance_criteria": [
-     "Documents are checked before approval"
+     "Applicants can upload common formats such as PDF, JPEG, and PNG",
+     "The system validates that both identity and address documents are attached before submission"
     ],
     "applicable_regulations": [
      "kyc_aml"
@@ -42,65 +71,129 @@
     "approval_status": "proposed"
    },
    {
-    "id": "FR-2",
-    "requirement": "The system shall tell declined applicants the reason.",
-    "priority": "Medium",
+    "id": "FR-3",
+    "requirement": "The system shall calculate a credit score using credit bureau data and declared income.",
+    "priority": "High",
     "type": "FR",
     "categories": [
-     "Functional"
+     "Functional",
+     "Business",
+     "Data-management"
     ],
-    "source_stakeholder": "Customers and end users",
-    "source_text": "declined applicants must be told the reason",
+    "source_stakeholder": "Risk-management teams",
+    "source_text": "calculates a credit score from credit bureau data and declared income",
     "source_document": null,
-    "business_justification": "Fair lending.",
+    "business_justification": "Automated credit scoring is necessary to accurately assess borrower risk and determine loan eligibility.",
     "dependencies": [
      "FR-1"
     ],
     "assumptions": [
-     "Credit bureau API is available"
+     "Credit bureau data is retrieved via an automated API"
     ],
     "acceptance_criteria": [
-     "The decline notice states the reason"
+     "The system retrieves credit bureau data for the applicant",
+     "The credit score is computed using the bureau score and declared income values"
+    ],
+    "applicable_regulations": [
+     "fair_lending",
+     "kyc_aml"
+    ],
+    "risk_level": "High",
+    "confidence": "Medium",
+    "approval_status": "proposed"
+   },
+   {
+    "id": "FR-4",
+    "requirement": "The system shall route loan applications exceeding the risk threshold to a second approver.",
+    "priority": "High",
+    "type": "FR",
+    "categories": [
+     "Functional",
+     "Business"
+    ],
+    "source_stakeholder": "Risk-management teams",
+    "source_text": "Loans above the bank's risk threshold need a second approver",
+    "source_document": null,
+    "business_justification": "Dual approval mitigates financial and regulatory exposure on high-risk loans.",
+    "dependencies": [
+     "FR-3"
+    ],
+    "assumptions": [],
+    "acceptance_criteria": [
+     "Applications above the risk threshold enter a pending secondary approval queue",
+     "Final approval is only granted after a second designated approver authorizes the loan"
+    ],
+    "applicable_regulations": [
+     "kyc_aml"
+    ],
+    "risk_level": "High",
+    "confidence": "High",
+    "approval_status": "proposed"
+   },
+   {
+    "id": "FR-5",
+    "requirement": "The system shall automatically generate and send a decline reason to applicants whose loans are declined.",
+    "priority": "Medium",
+    "type": "FR",
+    "categories": [
+     "Functional",
+     "Regulatory"
+    ],
+    "source_stakeholder": "Compliance and legal officers",
+    "source_text": "declined applicants must be told the reason",
+    "source_document": null,
+    "business_justification": "Providing decline reasons ensures compliance with fair lending and regulatory disclosure rules.",
+    "dependencies": [
+     "FR-3"
+    ],
+    "assumptions": [],
+    "acceptance_criteria": [
+     "Declined applications trigger a notification containing the specific decline reason",
+     "The decline reason matches the calculated risk or credit decision parameters"
     ],
     "applicable_regulations": [
      "fair_lending"
     ],
     "risk_level": "Medium",
-    "confidence": "Medium",
+    "confidence": "High",
+    "approval_status": "proposed"
+   },
+   {
+    "id": "FR-6",
+    "requirement": "The system shall log and retain every verification and credit decision for audit purposes.",
+    "priority": "High",
+    "type": "FR",
+    "categories": [
+     "Functional",
+     "Audit and reporting",
+     "Regulatory"
+    ],
+    "source_stakeholder": "Auditors and regulators",
+    "source_text": "every verification and credit decision must be kept for audit",
+    "source_document": null,
+    "business_justification": "Comprehensive audit trails are required to satisfy banking regulators and internal audits.",
+    "dependencies": [
+     "FR-2",
+     "FR-3",
+     "FR-4"
+    ],
+    "assumptions": [],
+    "acceptance_criteria": [
+     "Every KYC verification event and credit decision is recorded with a timestamp and user/system ID",
+     "Audit logs are immutable and stored securely"
+    ],
+    "applicable_regulations": [
+     "fair_lending"
+    ],
+    "risk_level": "High",
+    "confidence": "High",
     "approval_status": "proposed"
    }
   ],
   "non_functional_requirements": [
    {
     "id": "NFR-1",
-    "requirement": "The system shall return a credit decision within 5 seconds.",
-    "priority": "Medium",
-    "type": "NFR",
-    "categories": [
-     "Performance"
-    ],
-    "source_stakeholder": "Software architects and developers",
-    "source_text": "",
-    "source_document": null,
-    "business_justification": "Applicants abandon slow flows.",
-    "dependencies": [
-     "FR-1",
-     "FR-2"
-    ],
-    "assumptions": [
-     "5 seconds is acceptable | to applicants"
-    ],
-    "acceptance_criteria": [
-     "p95 under 5 s"
-    ],
-    "applicable_regulations": [],
-    "risk_level": "Medium",
-    "confidence": "Low",
-    "approval_status": "proposed"
-   },
-   {
-    "id": "NFR-2",
-    "requirement": "The system shall encrypt uploaded identity documents in transit and at rest.",
+    "requirement": "The system shall encrypt all uploaded KYC documents and personal data both in transit and at rest.",
     "priority": "High",
     "type": "NFR",
     "categories": [
@@ -108,24 +201,79 @@
      "Privacy"
     ],
     "source_stakeholder": "Information-security teams",
-    "source_text": "",
+    "source_text": "upload identity and address documents for KYC verification",
     "source_document": null,
-    "business_justification": "Identity documents are sensitive personal data.",
+    "business_justification": "Protecting sensitive personal identity data prevents identity theft and severe regulatory penalties.",
     "dependencies": [
-     "FR-1"
+     "FR-2"
     ],
     "assumptions": [
-     "Documents are stored by the bank, not a third party"
+     "Encryption standards comply with standard banking security frameworks"
     ],
     "acceptance_criteria": [
-     "TLS 1.2+ for uploads",
-     "AES-256 at rest"
+     "Data in transit uses TLS 1.3 or TLS 1.2",
+     "Stored documents and database fields containing personal data are encrypted using AES-256"
     ],
     "applicable_regulations": [
      "data_protection"
     ],
     "risk_level": "High",
+    "confidence": "Medium",
+    "approval_status": "proposed"
+   },
+   {
+    "id": "NFR-2",
+    "requirement": "The system shall maintain an operational uptime of at least 99.9% during banking hours.",
+    "priority": "High",
+    "type": "NFR",
+    "categories": [
+     "Availability and reliability"
+    ],
+    "source_stakeholder": "Operations personnel",
+    "source_text": "",
+    "source_document": null,
+    "business_justification": "High availability ensures continuous loan processing and prevents revenue disruption.",
+    "dependencies": [
+     "FR-1"
+    ],
+    "assumptions": [
+     "Banking hours are defined as 9:00 AM to 6:00 PM local time, Monday through Saturday"
+    ],
+    "acceptance_criteria": [
+     "System availability measures at or above 99.9% calculated monthly during core business hours",
+     "Unplanned downtime incidents are logged and reported automatically"
+    ],
+    "applicable_regulations": [],
+    "risk_level": "Medium",
     "confidence": "Low",
+    "approval_status": "proposed"
+   },
+   {
+    "id": "NFR-3",
+    "requirement": "The system shall complete the credit score calculation and decision routing within 5 seconds of application submission.",
+    "priority": "Medium",
+    "type": "NFR",
+    "categories": [
+     "Performance"
+    ],
+    "source_stakeholder": "Software architects and developers",
+    "source_text": "calculates a credit score from credit bureau data and declared income",
+    "source_document": null,
+    "business_justification": "Fast processing times improve applicant user experience and reduce loan abandonment rates.",
+    "dependencies": [
+     "FR-3",
+     "FR-4"
+    ],
+    "assumptions": [
+     "5-second response time is the agreed service level objective for automated scoring"
+    ],
+    "acceptance_criteria": [
+     "95% of credit score calculations and routing workflows execute in under 5 seconds",
+     "Timeout handling is in place if external credit bureau APIs fail to respond within 3 seconds"
+    ],
+    "applicable_regulations": [],
+    "risk_level": "Medium",
+    "confidence": "Medium",
     "approval_status": "proposed"
    }
   ]
@@ -135,42 +283,95 @@
   "considerations": [
    {
     "related_requirement_ids": [
-     "FR-1"
+     "FR-3"
     ],
-    "note": "Verify identity documents and keep a record of verification decisions.",
-    "source": "kyc_aml",
-    "status": "satisfied",
-    "evidence": "A digital loan origination or account-opening system should therefore typically include: identity",
-    "compliance_gap": null,
+    "note": "Expectations for automated or algorithmic credit-scoring components regarding periodic review of scoring logic for disparate impact on protected groups.",
+    "source": "fair_lending",
+    "status": "gap",
+    "evidence": "the scoring logic should be periodically reviewed for disparate impact on protected groups",
+    "compliance_gap": "The requirements do not specify periodic reviews of automated credit-scoring logic for disparate impact on protected groups.",
     "checkpoints": [
-     "Compliance sign-off of the KYC procedure before go-live"
+     "Periodic review of scoring logic for disparate impact"
     ],
-    "retention_and_reporting": [
-     "Retain verification records"
+    "retention_and_reporting": [],
+    "scope": "domain-specific"
+   },
+   {
+    "related_requirement_ids": [
+     "FR-5"
     ],
+    "note": "Expectation that borrowers who are declined receive a reason for the decision, not just a rejection notice.",
+    "source": "fair_lending",
+    "status": "satisfied",
+    "evidence": "borrowers who are declined should generally receive a reason for the decision, not just a rejection notice",
+    "compliance_gap": null,
+    "checkpoints": [],
+    "retention_and_reporting": [],
+    "scope": "domain-specific"
+   },
+   {
+    "related_requirement_ids": [
+     "FR-6"
+    ],
+    "note": "Expectation to maintain an audit trail of verification decisions.",
+    "source": "fair_lending",
+    "status": "satisfied",
+    "evidence": "borrowers who are declined should generally receive a reason for the decision, not just a rejection notice",
+    "compliance_gap": null,
+    "checkpoints": [],
+    "retention_and_reporting": [],
     "scope": "domain-specific"
    },
    {
     "related_requirement_ids": [
      "FR-2"
     ],
-    "note": "Give declined borrowers a reason for the decision.",
-    "source": "fair_lending",
-    "status": "gap",
-    "evidence": "Automated or algorithmic credit-scoring components carry additional expectations: the scoring",
-    "compliance_gap": "No process for a borrower to request the reason later.",
+    "note": "Expectation to include identity document capture and verification, address verification, a risk-scoring step to classify customer risk level, and an audit trail of verification decisions.",
+    "source": "kyc_aml",
+    "status": "satisfied",
+    "evidence": "identity document capture and verification, address verification, a risk-scoring step to classify customer risk level, and an audit trail of verification decisions",
+    "compliance_gap": null,
+    "checkpoints": [],
+    "retention_and_reporting": [
+     "Retain verification records for audit purposes"
+    ],
+    "scope": "domain-specific"
+   },
+   {
+    "related_requirement_ids": [
+     "FR-2",
+     "FR-3"
+    ],
+    "note": "Expectation to capture enough identity and background information to support a risk-based assessment.",
+    "source": "kyc_aml",
+    "status": "satisfied",
+    "evidence": "capture enough identity and background information to support a risk-based assessment",
+    "compliance_gap": null,
     "checkpoints": [],
     "retention_and_reporting": [],
     "scope": "domain-specific"
    },
    {
     "related_requirement_ids": [
-     "NFR-2"
+     "FR-4"
     ],
-    "note": "Encrypt sensitive personal data in transit and at rest.",
+    "note": "Expectation to apply enhanced due diligence or risk-based assessment for higher-risk customers.",
+    "source": "kyc_aml",
+    "status": "satisfied",
+    "evidence": "higher-risk customers or transaction patterns typically warrant deeper verification",
+    "compliance_gap": null,
+    "checkpoints": [],
+    "retention_and_reporting": [],
+    "scope": "domain-specific"
+   },
+   {
+    "related_requirement_ids": [
+     "NFR-1"
+    ],
+    "note": "Expectation for encryption of data at rest and in transit.",
     "source": "data_protection",
     "status": "satisfied",
-    "evidence": "Modern data protection frameworks (such as India's Digital Personal Data",
+    "evidence": "encryption of data at rest and in transit",
     "compliance_gap": null,
     "checkpoints": [],
     "retention_and_reporting": [],
@@ -180,17 +381,17 @@
     "related_requirement_ids": [
      "NFR-2"
     ],
-    "note": "Baseline: encryption and access control for sensitive data.",
+    "note": "Expectation for operational uptime and reliability as part of a system's duty of care.",
     "source": "general_security_baseline",
     "status": "satisfied",
-    "evidence": "Regardless of industry, most modern software systems that handle user",
+    "evidence": "Availability and reliability expectations, while not always a formal compliance requirement, are commonly treated as part of a system's duty of care",
     "compliance_gap": null,
     "checkpoints": [],
     "retention_and_reporting": [],
     "scope": "generic baseline"
    }
   ],
-  "summary": "Loan origination is regulated: identity verification, explainable decline reasons and protection of identity documents apply.",
+  "summary": "The digital loan origination system requirements satisfy most baseline KYC, data protection, and security expectations through document uploads, encryption, uptime commitments, and audit logging. However, there is a compliance gap regarding the fair lending expectation to periodically review automated credit-scoring logic for disparate impact on protected groups. Overall compliance risk is rated as High due to the processing of sensitive personal and financial data in a regulated lending domain.",
   "kb_relevance": "relevant",
   "sources_consulted": [
    "data_protection",
@@ -211,20 +412,55 @@
   ],
   "retrieved_chunks": [
    {
-    "id": "kyc_aml-4",
-    "source": "kyc_aml",
+    "id": "fair_lending-3",
+    "source": "fair_lending",
     "scope": "domain-specific",
-    "distance": 0.43,
+    "distance": 0.5236,
     "matched_requirement_ids": [
-     "FR-1"
+     "FR-3",
+     "FR-5",
+     "FR-6",
+     "NFR-3"
     ],
     "applies_to_domain": true
    },
    {
-    "id": "data_protection-1",
+    "id": "kyc_aml-4",
+    "source": "kyc_aml",
+    "scope": "domain-specific",
+    "distance": 0.5267,
+    "matched_requirement_ids": [
+     "FR-2"
+    ],
+    "applies_to_domain": true
+   },
+   {
+    "id": "kyc_aml-2",
+    "source": "kyc_aml",
+    "scope": "domain-specific",
+    "distance": 0.543,
+    "matched_requirement_ids": [
+     "FR-2",
+     "FR-3",
+     "FR-4"
+    ],
+    "applies_to_domain": true
+   },
+   {
+    "id": "data_protection-4",
     "source": "data_protection",
     "scope": "domain-specific",
-    "distance": 0.55,
+    "distance": 0.5452,
+    "matched_requirement_ids": [
+     "NFR-1"
+    ],
+    "applies_to_domain": true
+   },
+   {
+    "id": "general_security_baseline-4",
+    "source": "general_security_baseline",
+    "scope": "generic baseline",
+    "distance": 0.5529,
     "matched_requirement_ids": [
      "NFR-2"
     ],
@@ -234,39 +470,49 @@
     "id": "kyc_aml-1",
     "source": "kyc_aml",
     "scope": "domain-specific",
-    "distance": 0.57,
+    "distance": 0.5702,
     "matched_requirement_ids": [
-     "FR-1"
+     "FR-2"
     ],
     "applies_to_domain": true
    },
    {
-    "id": "general_security_baseline-1",
-    "source": "general_security_baseline",
-    "scope": "generic baseline",
-    "distance": 0.58,
-    "matched_requirement_ids": [
-     "NFR-2"
-    ],
-    "applies_to_domain": true
-   },
-   {
-    "id": "payment_security-0",
+    "id": "payment_security-1",
     "source": "payment_security",
     "scope": "domain-specific",
-    "distance": 0.6,
+    "distance": 0.5793,
     "matched_requirement_ids": [
-     "NFR-2"
+     "NFR-1"
     ],
     "applies_to_domain": false
    },
    {
-    "id": "fair_lending-3",
+    "id": "general_security_baseline-2",
+    "source": "general_security_baseline",
+    "scope": "generic baseline",
+    "distance": 0.5825,
+    "matched_requirement_ids": [
+     "NFR-1"
+    ],
+    "applies_to_domain": true
+   },
+   {
+    "id": "fair_lending-4",
     "source": "fair_lending",
     "scope": "domain-specific",
-    "distance": 0.61,
+    "distance": 0.5996,
     "matched_requirement_ids": [
-     "FR-2"
+     "FR-5"
+    ],
+    "applies_to_domain": true
+   },
+   {
+    "id": "kyc_aml-3",
+    "source": "kyc_aml",
+    "scope": "domain-specific",
+    "distance": 0.6175,
+    "matched_requirement_ids": [
+     "FR-6"
     ],
     "applies_to_domain": true
    }
@@ -278,6 +524,12 @@
   "requirements": [
    {
     "requirement_id": "FR-1",
+    "mappings": [],
+    "needs_human_review": false,
+    "review_reasons": []
+   },
+   {
+    "requirement_id": "FR-2",
     "mappings": [
      {
       "source": "kyc_aml",
@@ -287,26 +539,24 @@
       "version": "1",
       "effective_date": "2026-11-25",
       "chunk_id": "kyc_aml-4",
-      "distance": 0.43,
+      "distance": 0.5267,
       "status": "satisfied",
-      "required_control": "Verify identity documents and keep a record of verification decisions.",
-      "evidence": "A digital loan origination or account-opening system should therefore typically include: identity",
+      "required_control": "Expectation to include identity document capture and verification, address verification, a risk-scoring step to classify customer risk level, and an audit trail of verification decisions.",
+      "evidence": "identity document capture and verification, address verification, a risk-scoring step to classify customer risk level, and an audit trail of verification decisions",
       "evidence_verified": true,
       "compliance_gap": null,
-      "checkpoints": [
-       "Compliance sign-off of the KYC procedure before go-live"
-      ],
+      "checkpoints": [],
       "retention_and_reporting": [
-       "Retain verification records"
+       "Retain verification records for audit purposes"
       ],
-      "confidence": "High"
+      "confidence": "Medium"
      }
     ],
     "needs_human_review": false,
     "review_reasons": []
    },
    {
-    "requirement_id": "FR-2",
+    "requirement_id": "FR-3",
     "mappings": [
      {
       "source": "fair_lending",
@@ -316,30 +566,119 @@
       "version": "1",
       "effective_date": "2026-11-25",
       "chunk_id": "fair_lending-3",
-      "distance": 0.61,
+      "distance": 0.5236,
       "status": "gap",
-      "required_control": "Give declined borrowers a reason for the decision.",
-      "evidence": "Automated or algorithmic credit-scoring components carry additional expectations: the scoring",
+      "required_control": "Expectations for automated or algorithmic credit-scoring components regarding periodic review of scoring logic for disparate impact on protected groups.",
+      "evidence": "the scoring logic should be periodically reviewed for disparate impact on protected groups",
       "evidence_verified": true,
-      "compliance_gap": "No process for a borrower to request the reason later.",
+      "compliance_gap": "The requirements do not specify periodic reviews of automated credit-scoring logic for disparate impact on protected groups.",
+      "checkpoints": [
+       "Periodic review of scoring logic for disparate impact"
+      ],
+      "retention_and_reporting": [],
+      "confidence": "Medium"
+     },
+     {
+      "source": "kyc_aml",
+      "regulation": "Know Your Customer (KYC) and Anti-Money Laundering (AML) Principles",
+      "scope": "domain-specific",
+      "jurisdiction": "India; principles common to most jurisdictions",
+      "version": "1",
+      "effective_date": "2026-11-25",
+      "chunk_id": "kyc_aml-2",
+      "distance": 0.543,
+      "status": "satisfied",
+      "required_control": "Expectation to capture enough identity and background information to support a risk-based assessment.",
+      "evidence": "capture enough identity and background information to support a risk-based assessment",
+      "evidence_verified": true,
+      "compliance_gap": null,
       "checkpoints": [],
       "retention_and_reporting": [],
-      "confidence": "Low"
+      "confidence": "Medium"
      }
     ],
     "needs_human_review": true,
     "review_reasons": [
-     "fair_lending: low-confidence match (distance 0.61)"
+     "fair_lending: compliance gap on a high-risk requirement; the interpretation needs compliance or legal approval"
     ]
    },
    {
-    "requirement_id": "NFR-1",
-    "mappings": [],
+    "requirement_id": "FR-4",
+    "mappings": [
+     {
+      "source": "kyc_aml",
+      "regulation": "Know Your Customer (KYC) and Anti-Money Laundering (AML) Principles",
+      "scope": "domain-specific",
+      "jurisdiction": "India; principles common to most jurisdictions",
+      "version": "1",
+      "effective_date": "2026-11-25",
+      "chunk_id": "kyc_aml-2",
+      "distance": 0.543,
+      "status": "satisfied",
+      "required_control": "Expectation to apply enhanced due diligence or risk-based assessment for higher-risk customers.",
+      "evidence": "higher-risk customers or transaction patterns typically warrant deeper verification",
+      "evidence_verified": true,
+      "compliance_gap": null,
+      "checkpoints": [],
+      "retention_and_reporting": [],
+      "confidence": "Medium"
+     }
+    ],
     "needs_human_review": false,
     "review_reasons": []
    },
    {
-    "requirement_id": "NFR-2",
+    "requirement_id": "FR-5",
+    "mappings": [
+     {
+      "source": "fair_lending",
+      "regulation": "Fair Lending and Responsible Credit Assessment Principles",
+      "scope": "domain-specific",
+      "jurisdiction": "India; principles common to most jurisdictions",
+      "version": "1",
+      "effective_date": "2026-11-25",
+      "chunk_id": "fair_lending-3",
+      "distance": 0.5236,
+      "status": "satisfied",
+      "required_control": "Expectation that borrowers who are declined receive a reason for the decision, not just a rejection notice.",
+      "evidence": "borrowers who are declined should generally receive a reason for the decision, not just a rejection notice",
+      "evidence_verified": true,
+      "compliance_gap": null,
+      "checkpoints": [],
+      "retention_and_reporting": [],
+      "confidence": "Medium"
+     }
+    ],
+    "needs_human_review": false,
+    "review_reasons": []
+   },
+   {
+    "requirement_id": "FR-6",
+    "mappings": [
+     {
+      "source": "fair_lending",
+      "regulation": "Fair Lending and Responsible Credit Assessment Principles",
+      "scope": "domain-specific",
+      "jurisdiction": "India; principles common to most jurisdictions",
+      "version": "1",
+      "effective_date": "2026-11-25",
+      "chunk_id": "fair_lending-3",
+      "distance": 0.5236,
+      "status": "satisfied",
+      "required_control": "Expectation to maintain an audit trail of verification decisions.",
+      "evidence": "borrowers who are declined should generally receive a reason for the decision, not just a rejection notice",
+      "evidence_verified": true,
+      "compliance_gap": null,
+      "checkpoints": [],
+      "retention_and_reporting": [],
+      "confidence": "Medium"
+     }
+    ],
+    "needs_human_review": false,
+    "review_reasons": []
+   },
+   {
+    "requirement_id": "NFR-1",
     "mappings": [
      {
       "source": "data_protection",
@@ -348,11 +687,11 @@
       "jurisdiction": "India; principles common to comparable frameworks elsewhere",
       "version": "1",
       "effective_date": "2026-11-25",
-      "chunk_id": "data_protection-1",
-      "distance": 0.55,
+      "chunk_id": "data_protection-4",
+      "distance": 0.5452,
       "status": "satisfied",
-      "required_control": "Encrypt sensitive personal data in transit and at rest.",
-      "evidence": "Modern data protection frameworks (such as India's Digital Personal Data",
+      "required_control": "Expectation for encryption of data at rest and in transit.",
+      "evidence": "encryption of data at rest and in transit",
       "evidence_verified": true,
       "compliance_gap": null,
       "checkpoints": [],
@@ -366,11 +705,38 @@
       "jurisdiction": "Not jurisdiction-specific",
       "version": "1",
       "effective_date": "2026-11-25",
-      "chunk_id": "general_security_baseline-1",
-      "distance": 0.58,
+      "chunk_id": "general_security_baseline-2",
+      "distance": 0.5825,
+      "status": "not_assessed",
+      "required_control": "",
+      "evidence": "",
+      "evidence_verified": false,
+      "compliance_gap": null,
+      "checkpoints": [],
+      "retention_and_reporting": [],
+      "confidence": "Low"
+     }
+    ],
+    "needs_human_review": true,
+    "review_reasons": [
+     "general_security_baseline: retrieval matched this requirement but the analysis did not assess it"
+    ]
+   },
+   {
+    "requirement_id": "NFR-2",
+    "mappings": [
+     {
+      "source": "general_security_baseline",
+      "regulation": "General Security and Privacy Baseline (Domain-Agnostic)",
+      "scope": "generic baseline",
+      "jurisdiction": "Not jurisdiction-specific",
+      "version": "1",
+      "effective_date": "2026-11-25",
+      "chunk_id": "general_security_baseline-4",
+      "distance": 0.5529,
       "status": "satisfied",
-      "required_control": "Baseline: encryption and access control for sensitive data.",
-      "evidence": "Regardless of industry, most modern software systems that handle user",
+      "required_control": "Expectation for operational uptime and reliability as part of a system's duty of care.",
+      "evidence": "Availability and reliability expectations, while not always a formal compliance requirement, are commonly treated as part of a system's duty of care",
       "evidence_verified": true,
       "compliance_gap": null,
       "checkpoints": [],
@@ -380,20 +746,47 @@
     ],
     "needs_human_review": false,
     "review_reasons": []
+   },
+   {
+    "requirement_id": "NFR-3",
+    "mappings": [
+     {
+      "source": "fair_lending",
+      "regulation": "Fair Lending and Responsible Credit Assessment Principles",
+      "scope": "domain-specific",
+      "jurisdiction": "India; principles common to most jurisdictions",
+      "version": "1",
+      "effective_date": "2026-11-25",
+      "chunk_id": "fair_lending-3",
+      "distance": 0.5236,
+      "status": "not_applicable",
+      "required_control": "Expectation for credit-scoring components under fair lending.",
+      "evidence": "Automated or algorithmic credit-scoring components carry additional expectations",
+      "evidence_verified": true,
+      "compliance_gap": null,
+      "checkpoints": [],
+      "retention_and_reporting": [],
+      "confidence": "Medium"
+     }
+    ],
+    "needs_human_review": true,
+    "review_reasons": [
+     "fair_lending: retrieval matched this requirement but the analysis judged it not applicable (ambiguous match)"
+    ]
    }
   ],
-  "review_count": 1
+  "review_count": 3
  },
  "quality": {
   "flags": [
    {
     "requirement_ids": [
      "FR-2",
-     "NFR-1"
+     "NFR-3"
     ],
     "type": "conflict",
-    "reason": "Waiting for the credit bureau can exceed the 5-second decision target.",
-    "suggested_fix": "Cache bureau data or relax the target for bureau timeouts.",
+    "reason": "FR-2 requires document upload for KYC verification upon submission, while NFR-3 requires completing credit score calculation and decision routing within 5 seconds of application submission. Document upload and external KYC verification processes typically introduce latency that conflicts with the strict 5-second end-to-end performance threshold.",
+    "suggested_fix": "Clarify that NFR-3 applies only to the credit score and routing engine by excluding document upload time from the 5-second window, or make document upload an asynchronous step.",
     "detected_by": "llm"
    }
   ],
@@ -409,120 +802,90 @@
    {
     "id": "RISK-1",
     "rank": 1,
-    "description": "Credit bureau outage blocks decisions within the response-time target",
-    "category": "Technical",
-    "likelihood": 3,
-    "likelihood_reason": "Recorded sample rating.",
+    "description": "Automated credit-scoring logic may result in disparate impact on protected groups because periodic fairness reviews are not mandated.",
+    "category": "Compliance",
+    "likelihood": 4,
+    "likelihood_reason": "The compliance gap explicitly states that requirements lack periodic reviews of automated credit-scoring logic for disparate impact.",
     "impact": 4,
-    "impact_reason": "Recorded sample rating.",
-    "score": 12,
+    "impact_reason": "Unchecked discriminatory lending practices can lead to major regulatory breaches and penalties for the bank.",
+    "score": 16,
     "level": "High",
-    "mitigation": "Cache bureau responses and queue applications during outages",
+    "mitigation": "Establish a mandatory policy and scheduled workflow for quarterly audits of the credit-scoring algorithms to detect and correct demographic disparities.",
     "linked_requirement_ids": [
-     "FR-2",
-     "NFR-1"
+     "FR-3"
     ]
    },
    {
     "id": "RISK-2",
     "rank": 2,
-    "description": "No route for borrowers to request a decline reason later",
-    "category": "Compliance",
-    "likelihood": 4,
-    "likelihood_reason": "Recorded sample rating.",
+    "description": "The system may fail to meet the 5-second end-to-end performance threshold due to latency introduced by KYC document uploads and external verification.",
+    "category": "Technical",
+    "likelihood": 5,
+    "likelihood_reason": "Quality flags identify a direct conflict between document upload verification needs and the strict 5-second performance threshold.",
     "impact": 3,
-    "impact_reason": "Recorded sample rating.",
-    "score": 12,
+    "impact_reason": "Processing delays will cause noticeable service disruption and user frustration during online application submission.",
+    "score": 15,
     "level": "High",
-    "mitigation": "Add a reason-request step to the decline notice",
+    "mitigation": "Decouple asynchronous KYC document processing and external bureau checks from the synchronous credit-scoring and initial decision path.",
     "linked_requirement_ids": [
-     "FR-2"
+     "FR-2",
+     "FR-3",
+     "NFR-3"
     ]
    },
    {
     "id": "RISK-3",
     "rank": 3,
-    "description": "Forged identity documents pass verification",
+    "description": "Uploaded KYC documents and personal data may be intercepted or improperly accessed during transit or storage if encryption controls are inadequately implemented.",
     "category": "Security",
-    "likelihood": 2,
-    "likelihood_reason": "Recorded sample rating.",
-    "impact": 5,
-    "impact_reason": "Recorded sample rating.",
-    "score": 10,
-    "level": "High",
-    "mitigation": "Document forensics and liveness checks",
-    "linked_requirement_ids": [
-     "FR-1"
-    ]
-   },
-   {
-    "id": "RISK-4",
-    "rank": 4,
-    "description": "Document storage leaks applicant data",
-    "category": "Security",
-    "likelihood": 2,
-    "likelihood_reason": "Recorded sample rating.",
+    "likelihood": 3,
+    "likelihood_reason": "Handling sensitive personal and identity data in an online loan system creates plausible exposure in normal operation without explicit technical implementation details.",
     "impact": 4,
-    "impact_reason": "Recorded sample rating.",
-    "score": 8,
-    "level": "Medium",
-    "mitigation": "Encrypt at rest and restrict access",
+    "impact_reason": "Compromise of sensitive identity and address documents exposes many customers to identity theft and data breach liabilities.",
+    "score": 12,
+    "level": "High",
+    "mitigation": "Implement industry-standard encryption protocols (such as AES-256 for data at rest and TLS 1.3 in transit) with rigorous key management.",
     "linked_requirement_ids": [
-     "NFR-2"
-    ]
-   },
-   {
-    "id": "RISK-5",
-    "rank": 5,
-    "description": "Scope growth from new loan products",
-    "category": "Business",
-    "likelihood": 2,
-    "likelihood_reason": "Recorded sample rating.",
-    "impact": 2,
-    "impact_reason": "Recorded sample rating.",
-    "score": 4,
-    "level": "Low",
-    "mitigation": "Change control on the product list",
-    "linked_requirement_ids": [
-     "FR-1"
+     "FR-2",
+     "NFR-1"
     ]
    }
   ],
   "scoring": "score = likelihood x impact (1-25); High >= 10, Medium 5-9, Low 1-4",
   "summary": {
-   "count": 5,
+   "count": 3,
    "by_level": {
     "High": 3,
-    "Medium": 1,
-    "Low": 1
+    "Medium": 0,
+    "Low": 0
    },
    "likelihood_distribution": {
     "1": 0,
-    "2": 3,
+    "2": 0,
     "3": 1,
     "4": 1,
-    "5": 0
+    "5": 1
    },
    "impact_distribution": {
     "1": 0,
-    "2": 1,
+    "2": 0,
     "3": 1,
     "4": 2,
-    "5": 1
+    "5": 0
    }
   }
  },
  "sdlc_recommendation": {
   "traits": {
    "clarity": 4,
-   "volatility": 1,
+   "volatility": 2,
    "complexity": 3,
    "criticality": 4,
-   "risk_uncertainty": 1,
+   "risk_uncertainty": 2,
    "verification_validation": 4,
    "stakeholder_feedback": 2,
    "incremental_suitability": 3,
-   "prototyping_need": 1,
+   "prototyping_need": 2,
    "security_risk": 4,
    "system_size": 3,
    "legacy_dependence": 3,
@@ -533,132 +896,84 @@
   "trait_details": {
    "clarity": {
     "score": 4,
-    "evidence": "From the scenario and requirements (recorded sample).",
-    "reason": "Rated 4 against the rubric."
+    "evidence": "The core features and most business rules are specified (online personal loan applications, KYC document upload, credit score calculation, second approver routing, decline reasons, and audit logging); only minor details remain open.",
+    "reason": "Because the core features and specific business rules are well-defined in the functional requirements, only minor implementation details remain open."
    },
    "volatility": {
-    "score": 1,
-    "evidence": "From the scenario and requirements (recorded sample).",
-    "reason": "Rated 1 against the rubric."
+    "score": 2,
+    "evidence": "Requirements are largely settled around standard digital loan origination and banking compliance rules, with only occasional planned updates expected.",
+    "reason": "Because banking loan processes are governed by established financial rules and regulatory frameworks, requirements are expected to be stable with only occasional planned updates."
    },
    "complexity": {
     "score": 3,
-    "evidence": "From the scenario and requirements (recorded sample).",
-    "reason": "Rated 3 against the rubric."
+    "evidence": "Integrations with credit bureau data, KYC verification, multi-tier approval routing, and audit logging represent a moderate number of technical components and integrations.",
+    "reason": "Because the system involves multiple distinct components such as credit bureau integration, KYC storage, and decision routing, it exhibits moderate technical complexity."
    },
    "criticality": {
     "score": 4,
-    "evidence": "From the scenario and requirements (recorded sample).",
-    "reason": "Rated 4 against the rubric."
+    "evidence": "Failure affects financial transactions, loan approvals, regulatory audits, and personal financial data for a bank.",
+    "reason": "Because incorrect credit decisions or system failures can cause significant financial, operational, and regulatory consequences, criticality is high."
    },
    "risk_uncertainty": {
-    "score": 1,
-    "evidence": "From the scenario and requirements (recorded sample).",
-    "reason": "Rated 1 against the rubric."
+    "score": 2,
+    "evidence": "The domain of digital loan origination and credit scoring is a mature, well-understood problem domain with established patterns.",
+    "reason": "Because the technical and business patterns for loan origination systems are standard and well-understood, the risk and uncertainty are low."
    },
    "verification_validation": {
     "score": 4,
-    "evidence": "From the scenario and requirements (recorded sample).",
-    "reason": "Rated 4 against the rubric."
+    "evidence": "Requirements mandate strict audit logging of every verification and decision, secure encryption of personal data, and high uptime.",
+    "reason": "Because financial and regulatory standards require rigorous verification and complete audit trails, rigorous V&V is necessary."
    },
    "stakeholder_feedback": {
     "score": 2,
-    "evidence": "From the scenario and requirements (recorded sample).",
-    "reason": "Rated 2 against the rubric."
+    "evidence": "The requirements define a standard banking workflow where once rules for credit scoring and approvals are set, continuous feedback is secondary to compliance.",
+    "reason": "Because the loan process is driven by fixed financial and regulatory rules rather than continuous exploratory feature evolution, feedback need is low."
    },
    "incremental_suitability": {
     "score": 3,
-    "evidence": "From the scenario and requirements (recorded sample).",
-    "reason": "Rated 3 against the rubric."
+    "evidence": "Core modules like application submission, KYC, credit scoring, and approval routing can be developed and released in stages.",
+    "reason": "Because functionality can be naturally split into phases such as intake/KYC first followed by scoring and approval workflows, incremental delivery is suitable."
    },
    "prototyping_need": {
-    "score": 1,
-    "evidence": "From the scenario and requirements (recorded sample).",
-    "reason": "Rated 1 against the rubric."
+    "score": 2,
+    "evidence": "Standard banking processes and integrations mean there is little novel uncertainty requiring throwaway prototypes.",
+    "reason": "Because the technical integrations and business logic follow established banking software patterns, substantial prototyping is unnecessary."
    },
    "security_risk": {
     "score": 4,
-    "evidence": "From the scenario and requirements (recorded sample).",
-    "reason": "Rated 4 against the rubric."
+    "evidence": "The system handles sensitive personal data, KYC documents, and financial loan transactions, making it a target for fraud.",
+    "reason": "Because the application processes sensitive personal and financial data subject to strict privacy and financial regulations, security risk is high."
    },
    "system_size": {
     "score": 3,
-    "evidence": "From the scenario and requirements (recorded sample).",
-    "reason": "Rated 3 against the rubric."
+    "evidence": "The system serves a mid-sized Indian bank with multiple modules including online application, KYC, credit bureau integration, approval routing, and auditing.",
+    "reason": "Because the application encompasses several distinct modules for a banking institution, it represents a medium-sized system."
    },
    "legacy_dependence": {
     "score": 3,
-    "evidence": "From the scenario and requirements (recorded sample).",
-    "reason": "Rated 3 against the rubric."
+    "evidence": "The system must integrate with external credit bureau data and internal banking infrastructure for loan processing and approvals.",
+    "reason": "Because the system relies on integration with existing credit bureaus and bank systems, there is a moderate legacy and external system dependence."
    },
    "continuous_delivery": {
     "score": 2,
-    "evidence": "From the scenario and requirements (recorded sample).",
-    "reason": "Rated 2 against the rubric."
+    "evidence": "Banking systems typically rely on planned, controlled release cycles rather than continuous deployment due to regulatory and compliance controls.",
+    "reason": "Because financial software deployments require careful change control and compliance checks, releases are planned rather than continuous."
    },
    "stakeholder_availability": {
     "score": 3,
-    "evidence": "From the scenario and requirements (recorded sample).",
-    "reason": "Rated 3 against the rubric."
+    "evidence": "The scenario describes a bank-backed project requiring regular engagement with risk and compliance stakeholders for rule definitions.",
+    "reason": "Because banking domain rules require regular review and input from business stakeholders and risk officers, regular availability is needed."
    },
    "budget_schedule_constraint": {
     "score": 3,
-    "evidence": "From the scenario and requirements (recorded sample).",
-    "reason": "Rated 3 against the rubric."
+    "evidence": "Inferred from typical enterprise banking software initiatives which operate under fixed project timelines and business milestones.",
+    "reason": "Because enterprise financial projects generally operate against planned target dates and structured budgets, a moderate schedule constraint is present."
    }
   },
   "scored_models": [
    {
-    "model": "V-Model",
-    "score": 79.6,
-    "profile": {
-     "clarity": 5,
-     "volatility": 1,
-     "complexity": 3,
-     "criticality": 5,
-     "risk_uncertainty": 2,
-     "verification_validation": 5,
-     "stakeholder_feedback": 1,
-     "incremental_suitability": 1,
-     "prototyping_need": 1,
-     "security_risk": 3,
-     "system_size": 4,
-     "legacy_dependence": 4,
-     "continuous_delivery": 1,
-     "stakeholder_availability": 2,
-     "budget_schedule_constraint": 3
-    },
-    "rank": 1,
-    "percent": "79.6%",
-    "why_not": null
-   },
-   {
-    "model": "Waterfall",
-    "score": 77.2,
-    "profile": {
-     "clarity": 5,
-     "volatility": 1,
-     "complexity": 2,
-     "criticality": 2,
-     "risk_uncertainty": 1,
-     "verification_validation": 2,
-     "stakeholder_feedback": 1,
-     "incremental_suitability": 1,
-     "prototyping_need": 1,
-     "security_risk": 3,
-     "system_size": 2,
-     "legacy_dependence": 3,
-     "continuous_delivery": 1,
-     "stakeholder_availability": 2,
-     "budget_schedule_constraint": 4
-    },
-    "rank": 2,
-    "percent": "77.2%",
-    "why_not": "Waterfall typically fits projects with lower project criticality (around 2/5) than this project's rated 4/5 - a gap of 2 points, the largest mismatch among the traits considered. This project's higher project criticality makes Waterfall a weaker structural fit here."
-   },
-   {
     "model": "Agile-V",
-    "score": 73.3,
+    "score": 79.4,
     "profile": {
      "clarity": 3,
      "volatility": 4,
@@ -676,13 +991,37 @@
      "stakeholder_availability": 4,
      "budget_schedule_constraint": 2
     },
-    "rank": 3,
-    "percent": "73.3%",
-    "why_not": "Agile-V typically fits projects with higher requirement volatility (around 4/5) than this project's rated 1/5 - a gap of 3 points, the largest mismatch among the traits considered. This project's lower requirement volatility makes Agile-V a weaker structural fit here."
+    "rank": 1,
+    "percent": "79.4%",
+    "why_not": null
+   },
+   {
+    "model": "V-Model",
+    "score": 77.9,
+    "profile": {
+     "clarity": 5,
+     "volatility": 1,
+     "complexity": 3,
+     "criticality": 5,
+     "risk_uncertainty": 2,
+     "verification_validation": 5,
+     "stakeholder_feedback": 1,
+     "incremental_suitability": 1,
+     "prototyping_need": 1,
+     "security_risk": 3,
+     "system_size": 4,
+     "legacy_dependence": 4,
+     "continuous_delivery": 1,
+     "stakeholder_availability": 2,
+     "budget_schedule_constraint": 3
+    },
+    "rank": 2,
+    "percent": "77.9%",
+    "why_not": "V-Model typically fits projects with lower incremental delivery suitability (around 1/5) than this project's rated 3/5 - a gap of 2 points, the largest mismatch among the traits considered. This project's higher incremental delivery suitability makes V-Model a weaker structural fit here."
    },
    {
     "model": "Incremental",
-    "score": 70.4,
+    "score": 76.5,
     "profile": {
      "clarity": 3,
      "volatility": 3,
@@ -700,13 +1039,13 @@
      "stakeholder_availability": 3,
      "budget_schedule_constraint": 4
     },
-    "rank": 4,
-    "percent": "70.4%",
-    "why_not": "Incremental typically fits projects with higher requirement volatility (around 3/5) than this project's rated 1/5 - a gap of 2 points, the largest mismatch among the traits considered. This project's lower requirement volatility makes Incremental a weaker structural fit here."
+    "rank": 3,
+    "percent": "76.5%",
+    "why_not": "Incremental typically fits projects with lower project criticality (around 2/5) than this project's rated 4/5 - a gap of 2 points, the largest mismatch among the traits considered. This project's higher project criticality makes Incremental a weaker structural fit here."
    },
    {
     "model": "DevSecOps",
-    "score": 68.7,
+    "score": 74.8,
     "profile": {
      "clarity": 3,
      "volatility": 4,
@@ -724,13 +1063,37 @@
      "stakeholder_availability": 4,
      "budget_schedule_constraint": 3
     },
+    "rank": 4,
+    "percent": "74.8%",
+    "why_not": "DevSecOps typically fits projects with higher need for continuous delivery (around 5/5) than this project's rated 2/5 - a gap of 3 points, the largest mismatch among the traits considered. This project's lower need for continuous delivery makes DevSecOps a weaker structural fit here."
+   },
+   {
+    "model": "Waterfall",
+    "score": 71.1,
+    "profile": {
+     "clarity": 5,
+     "volatility": 1,
+     "complexity": 2,
+     "criticality": 2,
+     "risk_uncertainty": 1,
+     "verification_validation": 2,
+     "stakeholder_feedback": 1,
+     "incremental_suitability": 1,
+     "prototyping_need": 1,
+     "security_risk": 3,
+     "system_size": 2,
+     "legacy_dependence": 3,
+     "continuous_delivery": 1,
+     "stakeholder_availability": 2,
+     "budget_schedule_constraint": 4
+    },
     "rank": 5,
-    "percent": "68.7%",
-    "why_not": "DevSecOps typically fits projects with higher requirement volatility (around 4/5) than this project's rated 1/5 - a gap of 3 points, the largest mismatch among the traits considered. This project's lower requirement volatility makes DevSecOps a weaker structural fit here."
+    "percent": "71.1%",
+    "why_not": "Waterfall typically fits projects with lower project criticality (around 2/5) than this project's rated 4/5 - a gap of 2 points, the largest mismatch among the traits considered. This project's higher project criticality makes Waterfall a weaker structural fit here."
    },
    {
     "model": "Spiral",
-    "score": 62.8,
+    "score": 68.9,
     "profile": {
      "clarity": 3,
      "volatility": 3,
@@ -749,12 +1112,12 @@
      "budget_schedule_constraint": 1
     },
     "rank": 6,
-    "percent": "62.8%",
-    "why_not": "Spiral typically fits projects with higher risk/uncertainty (around 5/5) than this project's rated 1/5 - a gap of 4 points, the largest mismatch among the traits considered. This project's lower risk/uncertainty makes Spiral a weaker structural fit here."
+    "percent": "68.9%",
+    "why_not": "Spiral typically fits projects with higher risk/uncertainty (around 5/5) than this project's rated 2/5 - a gap of 3 points, the largest mismatch among the traits considered. This project's lower risk/uncertainty makes Spiral a weaker structural fit here."
    },
    {
     "model": "Agile",
-    "score": 54.9,
+    "score": 61.1,
     "profile": {
      "clarity": 2,
      "volatility": 5,
@@ -773,17 +1136,17 @@
      "budget_schedule_constraint": 3
     },
     "rank": 7,
-    "percent": "54.9%",
-    "why_not": "Agile typically fits projects with higher requirement volatility (around 5/5) than this project's rated 1/5 - a gap of 4 points, the largest mismatch among the traits considered. This project's lower requirement volatility makes Agile a weaker structural fit here."
+    "percent": "61.1%",
+    "why_not": "Agile typically fits projects with higher requirement volatility (around 5/5) than this project's rated 2/5 - a gap of 3 points, the largest mismatch among the traits considered. This project's lower requirement volatility makes Agile a weaker structural fit here."
    }
   ],
-  "recommended_model": "V-Model",
+  "recommended_model": "Agile-V",
   "is_close_call": true,
   "justification": {
-   "requirement_characteristics": "Requirements are clear and stable (clarity 4/5, volatility 1/5).",
-   "project_characteristics": "Failure has major financial and regulatory consequences (criticality 4/5) in a well-understood domain (risk/uncertainty 1/5).",
-   "engineering_justification": "Verification & validation intensity of 4/5 and the audit trail in FR-1 suit a plan-driven model with planned test levels.",
-   "key_tradeoffs": "Late changes to credit rules are costly."
+   "requirement_characteristics": "The requirement clarity score of 4 out of 5 and requirement volatility score of 2 out of 5 indicate that the core banking features are well-defined and requirements are largely stable with only occasional planned updates expected.",
+   "project_characteristics": "The project complexity score of 3 out of 5, project criticality score of 4 out of 5, and risk/uncertainty score of 2 out of 5 reflect a moderate technical footprint for financial transactions with low technical ambiguity.",
+   "engineering_justification": "Agile-V fits these measured characteristics by combining structured verification for high-criticality elements like NFR-1 with iterative delivery stages suitable for incremental feature development.",
+   "key_tradeoffs": "A key trade-off of choosing Agile-V for this project is that balancing structured banking compliance with iterative cycles may occasionally slow down release timelines for standard updates."
   },
   "approval_required": {
    "approvers": [
@@ -793,23 +1156,23 @@
     "Compliance officer"
    ],
    "status": "pending",
-   "note": "Advisory only: adopting V-Model must be approved by the project manager, architect, security team and compliance officer (problem statement section 14). Nothing in this system records that approval yet."
+   "note": "Advisory only: adopting Agile-V must be approved by the project manager, architect, security team and compliance officer (problem statement section 14). For a /agents/pipeline run each acceptance is recorded per role on the run's SDLC approval item (POST /runs/<run_id>/approvals); the selection becomes approved only when all four have accepted the same version."
   }
  },
  "sdlc_workflow": {
-  "model": "V-Model",
+  "model": "Agile-V",
   "phases": [
    {
     "order": 1,
-    "name": "Requirements analysis",
+    "name": "Requirements baseline",
     "activities": [
      {
-      "text": "Specify requirements",
+      "text": "Specify requirements and acceptance tests up front",
       "source": "base",
       "requirement_ids": []
      },
      {
-      "text": "Write acceptance test plan",
+      "text": "Build the initial backlog from the baseline",
       "source": "base",
       "requirement_ids": []
      }
@@ -838,12 +1201,17 @@
     ],
     "deliverables": [
      {
-      "text": "Software Requirements Specification",
+      "text": "Requirements specification",
       "source": "base",
       "requirement_ids": []
      },
      {
       "text": "Acceptance test plan",
+      "source": "base",
+      "requirement_ids": []
+     },
+     {
+      "text": "Product backlog",
       "source": "base",
       "requirement_ids": []
      }
@@ -867,6 +1235,17 @@
       "text": "Map requirements to applicable regulations",
       "source": "base",
       "requirement_ids": []
+     },
+     {
+      "text": "Map fair lending rules and audit retention obligations to requirements FR-2, FR-3, FR-5, and FR-6.",
+      "source": "scenario",
+      "requirement_ids": [
+       "FR-2",
+       "FR-3",
+       "FR-5",
+       "FR-6"
+      ],
+      "reason": "Compliance findings and risks highlight specific regulatory retention and fair lending review needs."
      }
     ],
     "approval_gates": [
@@ -885,7 +1264,7 @@
     ],
     "exit_criteria": [
      {
-      "text": "Requirements and acceptance test plan approved",
+      "text": "Baseline and backlog approved",
       "source": "base",
       "requirement_ids": []
      }
@@ -900,15 +1279,15 @@
    },
    {
     "order": 2,
-    "name": "System and architecture design",
+    "name": "Architecture and verification planning",
     "activities": [
      {
-      "text": "Design system and architecture",
+      "text": "Design the architecture",
       "source": "base",
       "requirement_ids": []
      },
      {
-      "text": "Write system and integration test plans",
+      "text": "Plan verification for each level",
       "source": "base",
       "requirement_ids": []
      }
@@ -932,12 +1311,12 @@
     ],
     "deliverables": [
      {
-      "text": "Architecture specification",
+      "text": "Architecture",
       "source": "base",
       "requirement_ids": []
      },
      {
-      "text": "System and integration test plans",
+      "text": "Verification plan",
       "source": "base",
       "requirement_ids": []
      }
@@ -949,20 +1328,31 @@
       "requirement_ids": []
      },
      {
-      "text": "Threat modelling of the document-upload flow",
+      "text": "Perform threat modeling on data flows for KYC document upload and credit scoring integration to mitigate interception and latency risks.",
       "source": "scenario",
       "requirement_ids": [
-       "FR-1",
-       "NFR-2"
+       "FR-2",
+       "FR-3",
+       "NFR-1",
+       "NFR-3"
       ],
-      "reason": "Identity documents are a fraud target."
+      "reason": "RISK-2 and RISK-3 identify high technical and security threats related to KYC uploads and external verification."
      }
     ],
     "testing_requirements": [
      {
-      "text": "System and integration tests defined",
+      "text": "System and integration tests planned",
       "source": "base",
       "requirement_ids": []
+     },
+     {
+      "text": "Plan performance and latency load tests to verify the 5-second end-to-end processing threshold under peak banking hours.",
+      "source": "scenario",
+      "requirement_ids": [
+       "NFR-2",
+       "NFR-3"
+      ],
+      "reason": "RISK-2 warns that external verification and KYC uploads may breach the 5-second threshold (NFR-3)."
      }
     ],
     "compliance_checkpoints": [
@@ -981,21 +1371,21 @@
     ],
     "entry_criteria": [
      {
-      "text": "Requirements approved",
+      "text": "Baseline approved",
       "source": "base",
       "requirement_ids": []
      }
     ],
     "exit_criteria": [
      {
-      "text": "Design and test plans reviewed",
+      "text": "Verification plan reviewed",
       "source": "base",
       "requirement_ids": []
      }
     ],
     "traceability_requirements": [
      {
-      "text": "Each design element traces to requirement ids",
+      "text": "Design elements trace to requirement ids",
       "source": "base",
       "requirement_ids": []
      }
@@ -1003,15 +1393,10 @@
    },
    {
     "order": 3,
-    "name": "Detailed design",
+    "name": "Iterative development",
     "activities": [
      {
-      "text": "Design modules",
-      "source": "base",
-      "requirement_ids": []
-     },
-     {
-      "text": "Write unit test plans",
+      "text": "Build in sprints; verify each increment against its V-level tests",
       "source": "base",
       "requirement_ids": []
      }
@@ -1030,104 +1415,61 @@
     ],
     "deliverables": [
      {
-      "text": "Module designs",
+      "text": "Verified increments",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
+    "security_activities": [
+     {
+      "text": "Secure coding; peer review",
       "source": "base",
       "requirement_ids": []
      },
      {
-      "text": "Unit test plans",
-      "source": "base",
-      "requirement_ids": []
-     }
-    ],
-    "security_activities": [
-     {
-      "text": "Secure design review of modules",
-      "source": "base",
-      "requirement_ids": []
+      "text": "Perform static and dynamic application security testing focused on encryption at rest and in transit for all personal data and KYC documents.",
+      "source": "scenario",
+      "requirement_ids": [
+       "FR-2",
+       "NFR-1"
+      ],
+      "reason": "RISK-3 highlights the high security risk of intercepted or improperly accessed KYC documents and personal data."
      }
     ],
     "testing_requirements": [
      {
-      "text": "Unit tests defined for every module",
+      "text": "Unit, integration and regression tests every sprint",
       "source": "base",
       "requirement_ids": []
      }
     ],
-    "compliance_checkpoints": [],
-    "approval_gates": [],
+    "compliance_checkpoints": [
+     {
+      "text": "Incorporate periodic review mechanisms into the automated credit-scoring logic to detect and prevent disparate impact on protected groups.",
+      "source": "scenario",
+      "requirement_ids": [
+       "FR-3"
+      ],
+      "reason": "Compliance findings note a gap against fair lending regarding periodic reviews of automated scoring logic for disparate impact (RISK-1)."
+     }
+    ],
+    "approval_gates": [
+     {
+      "text": "Changes to approved requirements approved by the product owner and compliance officer",
+      "source": "base",
+      "requirement_ids": []
+     }
+    ],
     "entry_criteria": [
      {
-      "text": "Architecture approved",
+      "text": "Verification plan reviewed",
       "source": "base",
       "requirement_ids": []
      }
     ],
     "exit_criteria": [
      {
-      "text": "Module designs reviewed",
-      "source": "base",
-      "requirement_ids": []
-     }
-    ],
-    "traceability_requirements": [
-     {
-      "text": "Modules trace to design elements",
-      "source": "base",
-      "requirement_ids": []
-     }
-    ]
-   },
-   {
-    "order": 4,
-    "name": "Implementation",
-    "activities": [
-     {
-      "text": "Code modules to the detailed design",
-      "source": "base",
-      "requirement_ids": []
-     }
-    ],
-    "responsible_roles": [
-     {
-      "text": "Developers",
-      "source": "base",
-      "requirement_ids": []
-     }
-    ],
-    "deliverables": [
-     {
-      "text": "Source code",
-      "source": "base",
-      "requirement_ids": []
-     }
-    ],
-    "security_activities": [
-     {
-      "text": "Secure coding standard; code review",
-      "source": "base",
-      "requirement_ids": []
-     }
-    ],
-    "testing_requirements": [
-     {
-      "text": "Static analysis on every module",
-      "source": "base",
-      "requirement_ids": []
-     }
-    ],
-    "compliance_checkpoints": [],
-    "approval_gates": [],
-    "entry_criteria": [
-     {
-      "text": "Module designs reviewed",
-      "source": "base",
-      "requirement_ids": []
-     }
-    ],
-    "exit_criteria": [
-     {
-      "text": "Code complete and reviewed",
+      "text": "Increment verified",
       "source": "base",
       "requirement_ids": []
      }
@@ -1141,60 +1483,93 @@
     ]
    },
    {
-    "order": 5,
-    "name": "Unit and integration testing",
+    "order": 4,
+    "name": "System verification",
     "activities": [
      {
-      "text": "Execute unit and integration test plans",
+      "text": "Integrate increments; run system tests",
       "source": "base",
       "requirement_ids": []
      }
     ],
     "responsible_roles": [
      {
-      "text": "Developers",
+      "text": "Testers",
       "source": "base",
       "requirement_ids": []
      },
      {
-      "text": "Testers",
+      "text": "Security team",
       "source": "base",
       "requirement_ids": []
      }
     ],
     "deliverables": [
      {
-      "text": "Unit and integration test reports",
+      "text": "System test report",
       "source": "base",
       "requirement_ids": []
      }
     ],
     "security_activities": [
      {
-      "text": "Security tests of interfaces",
+      "text": "Penetration test",
       "source": "base",
       "requirement_ids": []
+     },
+     {
+      "text": "Execute penetration testing specifically targeting data encryption controls for uploaded KYC documents and personal data.",
+      "source": "scenario",
+      "requirement_ids": [
+       "FR-2",
+       "NFR-1"
+      ],
+      "reason": "RISK-3 requires verifying that encryption controls are adequately implemented against unauthorized access."
      }
     ],
     "testing_requirements": [
      {
-      "text": "All unit and integration tests pass",
+      "text": "All system tests pass",
       "source": "base",
       "requirement_ids": []
+     },
+     {
+      "text": "Run end-to-end performance and reliability tests verifying compliance with the 5-second response time and 99.9% uptime requirement during banking hours.",
+      "source": "scenario",
+      "requirement_ids": [
+       "NFR-2",
+       "NFR-3"
+      ],
+      "reason": "RISK-2 requires validating system performance under load prior to release."
      }
     ],
-    "compliance_checkpoints": [],
+    "compliance_checkpoints": [
+     {
+      "text": "Compliance evidence collected",
+      "source": "base",
+      "requirement_ids": []
+     },
+     {
+      "text": "Collect and verify audit log retention and automated decline notification records to ensure regulatory traceability.",
+      "source": "scenario",
+      "requirement_ids": [
+       "FR-5",
+       "FR-6"
+      ],
+      "reason": "Compliance obligations require retaining verification records and generating decline reasons for audit purposes."
+     }
+    ],
     "approval_gates": [],
     "entry_criteria": [
      {
-      "text": "Code complete",
+      "text": "Increments verified",
       "source": "base",
       "requirement_ids": []
      }
     ],
     "exit_criteria": [
      {
-      "text": "Integration tests passed",
+      "text": "System tests passed",
       "source": "base",
       "requirement_ids": []
      }
@@ -1208,21 +1583,16 @@
     ]
    },
    {
-    "order": 6,
-    "name": "System and acceptance testing",
+    "order": 5,
+    "name": "Validation and release",
     "activities": [
      {
-      "text": "Execute system and acceptance test plans",
+      "text": "Acceptance testing; release",
       "source": "base",
       "requirement_ids": []
      }
     ],
     "responsible_roles": [
-     {
-      "text": "Testers",
-      "source": "base",
-      "requirement_ids": []
-     },
      {
       "text": "Product owner",
       "source": "base",
@@ -1232,89 +1602,7 @@
       "text": "Compliance officer",
       "source": "base",
       "requirement_ids": []
-     }
-    ],
-    "deliverables": [
-     {
-      "text": "System test report",
-      "source": "base",
-      "requirement_ids": []
      },
-     {
-      "text": "Acceptance report",
-      "source": "base",
-      "requirement_ids": []
-     }
-    ],
-    "security_activities": [
-     {
-      "text": "Penetration test before release",
-      "source": "base",
-      "requirement_ids": []
-     }
-    ],
-    "testing_requirements": [
-     {
-      "text": "All system and acceptance tests pass",
-      "source": "base",
-      "requirement_ids": []
-     },
-     {
-      "text": "Decline-reason content tests for every decline path",
-      "source": "scenario",
-      "requirement_ids": [
-       "FR-2"
-      ],
-      "reason": "The compliance mapping found a gap here."
-     }
-    ],
-    "compliance_checkpoints": [
-     {
-      "text": "Compliance evidence reviewed by the compliance officer",
-      "source": "base",
-      "requirement_ids": []
-     }
-    ],
-    "approval_gates": [
-     {
-      "text": "Acceptance approved by the product owner",
-      "source": "base",
-      "requirement_ids": []
-     }
-    ],
-    "entry_criteria": [
-     {
-      "text": "Integration tests passed",
-      "source": "base",
-      "requirement_ids": []
-     }
-    ],
-    "exit_criteria": [
-     {
-      "text": "Acceptance criteria met",
-      "source": "base",
-      "requirement_ids": []
-     }
-    ],
-    "traceability_requirements": [
-     {
-      "text": "Test results traced back to every requirement",
-      "source": "base",
-      "requirement_ids": []
-     }
-    ]
-   },
-   {
-    "order": 7,
-    "name": "Deployment",
-    "activities": [
-     {
-      "text": "Release to production",
-      "source": "base",
-      "requirement_ids": []
-     }
-    ],
-    "responsible_roles": [
      {
       "text": "Operations",
       "source": "base",
@@ -1327,6 +1615,11 @@
      }
     ],
     "deliverables": [
+     {
+      "text": "Acceptance report",
+      "source": "base",
+      "requirement_ids": []
+     },
      {
       "text": "Release notes",
       "source": "base",
@@ -1342,7 +1635,7 @@
     ],
     "testing_requirements": [
      {
-      "text": "Smoke test in production",
+      "text": "Acceptance tests against the baseline",
       "source": "base",
       "requirement_ids": []
      }
@@ -1354,12 +1647,13 @@
       "requirement_ids": []
      },
      {
-      "text": "Compliance approval of the KYC procedure before go-live",
+      "text": "Obtain formal compliance sign-off confirming that fair lending periodic review processes and audit log retention mechanisms are active before go-live.",
       "source": "scenario",
       "requirement_ids": [
-       "FR-1"
+       "FR-3",
+       "FR-6"
       ],
-      "reason": "Checkpoint named by the compliance mapping."
+      "reason": "Compliance findings mandate periodic reviews and audit retention as conditions for deployment readiness."
      }
     ],
     "approval_gates": [
@@ -1371,7 +1665,7 @@
     ],
     "entry_criteria": [
      {
-      "text": "Acceptance criteria met",
+      "text": "System tests passed",
       "source": "base",
       "requirement_ids": []
      }
@@ -1385,20 +1679,24 @@
     ],
     "traceability_requirements": [
      {
-      "text": "Release notes list the requirement ids delivered",
+      "text": "Every requirement traced to its acceptance result",
       "source": "base",
       "requirement_ids": []
      }
     ]
    }
   ],
-  "added_items": 3,
+  "added_items": 9,
   "requirements_linked": [
-   "FR-1",
    "FR-2",
-   "NFR-2"
+   "FR-3",
+   "FR-5",
+   "FR-6",
+   "NFR-1",
+   "NFR-2",
+   "NFR-3"
   ],
-  "notice": "Base phases and items are the fixed V-Model template; items with source \"scenario\" were added for this project by the LLM and cannot remove or rename anything. The model choice itself still needs the approvals listed in sdlc_recommendation.approval_required."
+  "notice": "Base phases and items are the fixed Agile-V template; items with source \"scenario\" were added for this project by the LLM and cannot remove or rename anything. The model choice itself still needs the approvals listed in sdlc_recommendation.approval_required."
  },
  "artefacts": {
   "user_stories": [
@@ -1407,18 +1705,18 @@
     "requirement_ids": [
      "FR-1"
     ],
-    "role": "loan applicant",
-    "goal": "to upload my identity and address documents",
-    "benefit": "my KYC check can start",
+    "role": "applicant",
+    "goal": "to submit an online personal loan application",
+    "benefit": "I can apply for a loan easily",
     "acceptance_criteria": [
-     "Given a PDF or image, when I upload it, then it is stored and verification starts"
+     "Given I am on the loan application page, When I complete and submit the online application form with personal and financial details, Then the system generates a unique application reference number upon successful submission"
     ],
-    "story": "As a loan applicant, I want to upload my identity and address documents, so that my KYC check can start.",
+    "story": "As an applicant, I want to submit an online personal loan application, so that I can apply for a loan easily.",
     "source_statements": [
      {
       "requirement_id": "FR-1",
-      "stakeholder": "Compliance and legal officers",
-      "statement": "upload identity and address documents for KYC verification",
+      "stakeholder": "Customers and end users",
+      "statement": "Applicants apply online for personal loans",
       "assumptions": []
      }
     ]
@@ -1428,21 +1726,105 @@
     "requirement_ids": [
      "FR-2"
     ],
-    "role": "declined applicant",
-    "goal": "to see why my application was declined",
-    "benefit": "I can act on it",
+    "role": "applicant",
+    "goal": "to upload identity and address documents for KYC verification",
+    "benefit": "my identity and address can be verified",
     "acceptance_criteria": [
-     "Given a decline, when I open the notice, then the specific reason is shown"
+     "Given I am submitting my loan application, When I upload common formats such as PDF, JPEG, and PNG, Then the system validates that both identity and address documents are attached before submission"
     ],
-    "story": "As a declined applicant, I want to see why my application was declined, so that I can act on it.",
+    "story": "As an applicant, I want to upload identity and address documents for KYC verification, so that my identity and address can be verified.",
     "source_statements": [
      {
       "requirement_id": "FR-2",
-      "stakeholder": "Customers and end users",
-      "statement": "declined applicants must be told the reason",
+      "stakeholder": "Compliance and legal officers",
+      "statement": "upload identity and address documents for KYC verification",
+      "assumptions": []
+     }
+    ]
+   },
+   {
+    "id": "US-3",
+    "requirement_ids": [
+     "FR-3"
+    ],
+    "role": "risk-management team member",
+    "goal": "to calculate a credit score using credit bureau data and declared income",
+    "benefit": "the applicant's creditworthiness can be assessed",
+    "acceptance_criteria": [
+     "Given an application is submitted, When the system retrieves credit bureau data for the applicant, Then the credit score is computed using the bureau score and declared income values"
+    ],
+    "story": "As a risk-management team member, I want to calculate a credit score using credit bureau data and declared income, so that the applicant's creditworthiness can be assessed.",
+    "source_statements": [
+     {
+      "requirement_id": "FR-3",
+      "stakeholder": "Risk-management teams",
+      "statement": "calculates a credit score from credit bureau data and declared income",
       "assumptions": [
-       "Credit bureau API is available"
+       "Credit bureau data is retrieved via an automated API"
       ]
+     }
+    ]
+   },
+   {
+    "id": "US-4",
+    "requirement_ids": [
+     "FR-4"
+    ],
+    "role": "second approver",
+    "goal": "to review loan applications exceeding the risk threshold",
+    "benefit": "high-risk loans receive necessary secondary authorization",
+    "acceptance_criteria": [
+     "Given an application exceeds the risk threshold, When it enters the secondary approval queue, Then final approval is only granted after a second designated approver authorizes the loan"
+    ],
+    "story": "As a second approver, I want to review loan applications exceeding the risk threshold, so that high-risk loans receive necessary secondary authorization.",
+    "source_statements": [
+     {
+      "requirement_id": "FR-4",
+      "stakeholder": "Risk-management teams",
+      "statement": "Loans above the bank's risk threshold need a second approver",
+      "assumptions": []
+     }
+    ]
+   },
+   {
+    "id": "US-5",
+    "requirement_ids": [
+     "FR-5"
+    ],
+    "role": "compliance officer",
+    "goal": "to automatically generate and send a decline reason to applicants whose loans are declined",
+    "benefit": "applicants are properly informed of the decision",
+    "acceptance_criteria": [
+     "Given a loan application is declined, When the decline triggers, Then a notification containing the specific decline reason matching calculated risk or credit decision parameters is sent"
+    ],
+    "story": "As a compliance officer, I want to automatically generate and send a decline reason to applicants whose loans are declined, so that applicants are properly informed of the decision.",
+    "source_statements": [
+     {
+      "requirement_id": "FR-5",
+      "stakeholder": "Compliance and legal officers",
+      "statement": "declined applicants must be told the reason",
+      "assumptions": []
+     }
+    ]
+   },
+   {
+    "id": "US-6",
+    "requirement_ids": [
+     "FR-6"
+    ],
+    "role": "auditor",
+    "goal": "to log and retain every verification and credit decision",
+    "benefit": "full audit traceability is maintained",
+    "acceptance_criteria": [
+     "Given a verification event or credit decision occurs, When the system records it, Then every KYC verification event and credit decision is recorded with a timestamp and user/system ID in immutable, securely stored audit logs"
+    ],
+    "story": "As an auditor, I want to log and retain every verification and credit decision, so that full audit traceability is maintained.",
+    "source_statements": [
+     {
+      "requirement_id": "FR-6",
+      "stakeholder": "Auditors and regulators",
+      "statement": "every verification and credit decision must be kept for audit",
+      "assumptions": []
      }
     ]
    }
@@ -1451,41 +1833,92 @@
    {
     "id": "UC-1",
     "requirement_ids": [
-     "FR-2",
-     "NFR-1"
+     "FR-1",
+     "FR-2"
     ],
-    "name": "Decline an application",
-    "primary_actor": "Credit officer",
+    "name": "Submit Loan Application and KYC",
+    "primary_actor": "Applicant",
     "preconditions": [
-     "Credit score computed"
+     "The applicant accesses the online loan application portal."
     ],
     "main_flow": [
-     "Officer reviews the score",
-     "Officer declines",
-     "System sends the decline reason"
+     "Applicant fills in personal and financial details in the online application form.",
+     "Applicant uploads identity and address documents for KYC verification.",
+     "System validates that both identity and address documents are attached.",
+     "System submits the application and generates a unique application reference number."
     ],
     "alternative_flows": [
-     "Score unavailable: application queued"
+     "If documents are missing or in an unsupported format, the system prompts the applicant to attach valid identity and address documents before submission."
     ],
     "postconditions": [
-     "Applicant informed"
+     "The loan application is successfully submitted with a unique reference number and attached KYC documents."
     ],
     "source_statements": [
      {
-      "requirement_id": "FR-2",
+      "requirement_id": "FR-1",
       "stakeholder": "Customers and end users",
-      "statement": "declined applicants must be told the reason",
+      "statement": "Applicants apply online for personal loans",
+      "assumptions": []
+     },
+     {
+      "requirement_id": "FR-2",
+      "stakeholder": "Compliance and legal officers",
+      "statement": "upload identity and address documents for KYC verification",
+      "assumptions": []
+     }
+    ]
+   },
+   {
+    "id": "UC-2",
+    "requirement_ids": [
+     "FR-3",
+     "FR-4",
+     "FR-5",
+     "FR-6"
+    ],
+    "name": "Credit Score Calculation and Decision Routing",
+    "primary_actor": "System",
+    "preconditions": [
+     "A loan application with declared income and attached KYC documents has been successfully submitted."
+    ],
+    "main_flow": [
+     "System retrieves credit bureau data for the applicant.",
+     "System computes the credit score using the bureau score and declared income values.",
+     "System checks if the application exceeds the risk threshold.",
+     "If the application exceeds the threshold, the system routes it to a pending secondary approval queue for a second approver."
+    ],
+    "alternative_flows": [
+     "If the credit score indicates the loan should be declined, the system declines the application and automatically generates and sends a decline reason to the applicant."
+    ],
+    "postconditions": [
+     "The credit score is calculated, the application is either routed for secondary approval or declined with a reason, and all decisions are logged."
+    ],
+    "source_statements": [
+     {
+      "requirement_id": "FR-3",
+      "stakeholder": "Risk-management teams",
+      "statement": "calculates a credit score from credit bureau data and declared income",
       "assumptions": [
-       "Credit bureau API is available"
+       "Credit bureau data is retrieved via an automated API"
       ]
      },
      {
-      "requirement_id": "NFR-1",
-      "stakeholder": "Software architects and developers",
-      "statement": "",
-      "assumptions": [
-       "5 seconds is acceptable | to applicants"
-      ]
+      "requirement_id": "FR-4",
+      "stakeholder": "Risk-management teams",
+      "statement": "Loans above the bank's risk threshold need a second approver",
+      "assumptions": []
+     },
+     {
+      "requirement_id": "FR-5",
+      "stakeholder": "Compliance and legal officers",
+      "statement": "declined applicants must be told the reason",
+      "assumptions": []
+     },
+     {
+      "requirement_id": "FR-6",
+      "stakeholder": "Auditors and regulators",
+      "statement": "every verification and credit decision must be kept for audit",
+      "assumptions": []
      }
     ]
    }
@@ -1496,49 +1929,64 @@
     "requirement_ids": [
      "FR-1",
      "FR-2",
-     "NFR-1"
+     "FR-3",
+     "FR-4",
+     "FR-5",
+     "FR-6"
     ],
-    "name": "Loan application to decision",
+    "name": "End-to-End Loan Origination and Audit Logging Process",
     "steps": [
      {
       "actor": "Applicant",
-      "action": "Uploads identity and address documents"
+      "action": "Submits online application form and uploads identity and address KYC documents."
      },
      {
       "actor": "System",
-      "action": "Runs KYC verification"
+      "action": "Validates documents, retrieves credit bureau data, calculates credit score, and logs the verification event."
      },
      {
       "actor": "System",
-      "action": "Calculates the credit score"
-     },
-     {
-      "actor": "Credit officer",
-      "action": "Approves or declines with a reason"
+      "action": "Routes the application to a second approver if it exceeds the risk threshold, or declines with a reason if applicable, and logs the credit decision."
      }
     ],
     "source_statements": [
      {
       "requirement_id": "FR-1",
+      "stakeholder": "Customers and end users",
+      "statement": "Applicants apply online for personal loans",
+      "assumptions": []
+     },
+     {
+      "requirement_id": "FR-2",
       "stakeholder": "Compliance and legal officers",
       "statement": "upload identity and address documents for KYC verification",
       "assumptions": []
      },
      {
-      "requirement_id": "FR-2",
-      "stakeholder": "Customers and end users",
-      "statement": "declined applicants must be told the reason",
+      "requirement_id": "FR-3",
+      "stakeholder": "Risk-management teams",
+      "statement": "calculates a credit score from credit bureau data and declared income",
       "assumptions": [
-       "Credit bureau API is available"
+       "Credit bureau data is retrieved via an automated API"
       ]
      },
      {
-      "requirement_id": "NFR-1",
-      "stakeholder": "Software architects and developers",
-      "statement": "",
-      "assumptions": [
-       "5 seconds is acceptable | to applicants"
-      ]
+      "requirement_id": "FR-4",
+      "stakeholder": "Risk-management teams",
+      "statement": "Loans above the bank's risk threshold need a second approver",
+      "assumptions": []
+     },
+     {
+      "requirement_id": "FR-5",
+      "stakeholder": "Compliance and legal officers",
+      "statement": "declined applicants must be told the reason",
+      "assumptions": []
+     },
+     {
+      "requirement_id": "FR-6",
+      "stakeholder": "Auditors and regulators",
+      "statement": "every verification and credit decision must be kept for audit",
+      "assumptions": []
      }
     ]
    }
@@ -1548,30 +1996,124 @@
     "id": "DR-1",
     "requirement_ids": [
      "FR-1",
-     "NFR-2"
+     "FR-3"
     ],
-    "entity": "Applicant document",
-    "description": "Uploaded KYC document",
+    "entity": "Loan Application",
+    "description": "Stores personal and financial details submitted by the applicant along with a unique reference number.",
     "attributes": [
-     "document type",
-     "file",
-     "verification status"
+     "Application Reference Number",
+     "Personal Details",
+     "Financial Details",
+     "Declared Income"
     ],
     "retention": "",
     "source_statements": [
      {
       "requirement_id": "FR-1",
+      "stakeholder": "Customers and end users",
+      "statement": "Applicants apply online for personal loans",
+      "assumptions": []
+     },
+     {
+      "requirement_id": "FR-3",
+      "stakeholder": "Risk-management teams",
+      "statement": "calculates a credit score from credit bureau data and declared income",
+      "assumptions": [
+       "Credit bureau data is retrieved via an automated API"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "DR-2",
+    "requirement_ids": [
+     "FR-2",
+     "NFR-1"
+    ],
+    "entity": "KYC Document",
+    "description": "Stores uploaded identity and address documents for verification.",
+    "attributes": [
+     "Document Type (Identity/Address)",
+     "File Format (PDF, JPEG, PNG)",
+     "Encrypted Document Content"
+    ],
+    "retention": "",
+    "source_statements": [
+     {
+      "requirement_id": "FR-2",
       "stakeholder": "Compliance and legal officers",
       "statement": "upload identity and address documents for KYC verification",
       "assumptions": []
      },
      {
-      "requirement_id": "NFR-2",
+      "requirement_id": "NFR-1",
       "stakeholder": "Information-security teams",
-      "statement": "",
+      "statement": "upload identity and address documents for KYC verification",
       "assumptions": [
-       "Documents are stored by the bank, not a third party"
+       "Encryption standards comply with standard banking security frameworks"
       ]
+     }
+    ]
+   },
+   {
+    "id": "DR-3",
+    "requirement_ids": [
+     "FR-3",
+     "FR-4",
+     "FR-5"
+    ],
+    "entity": "Credit and Risk Decision Record",
+    "description": "Stores retrieved credit bureau data, calculated credit scores, approval routing status, and decline reasons.",
+    "attributes": [
+     "Credit Bureau Data",
+     "Calculated Credit Score",
+     "Risk Threshold Status",
+     "Secondary Approver ID",
+     "Decline Reason"
+    ],
+    "retention": "",
+    "source_statements": [
+     {
+      "requirement_id": "FR-3",
+      "stakeholder": "Risk-management teams",
+      "statement": "calculates a credit score from credit bureau data and declared income",
+      "assumptions": [
+       "Credit bureau data is retrieved via an automated API"
+      ]
+     },
+     {
+      "requirement_id": "FR-4",
+      "stakeholder": "Risk-management teams",
+      "statement": "Loans above the bank's risk threshold need a second approver",
+      "assumptions": []
+     },
+     {
+      "requirement_id": "FR-5",
+      "stakeholder": "Compliance and legal officers",
+      "statement": "declined applicants must be told the reason",
+      "assumptions": []
+     }
+    ]
+   },
+   {
+    "id": "DR-4",
+    "requirement_ids": [
+     "FR-6"
+    ],
+    "entity": "Audit Log",
+    "description": "Stores immutable and secure logs of every KYC verification event and credit decision.",
+    "attributes": [
+     "Timestamp",
+     "User or System ID",
+     "Event Type (Verification/Credit Decision)"
+    ],
+    "retention": "",
+    "source_statements": [
+     {
+      "requirement_id": "FR-6",
+      "stakeholder": "Auditors and regulators",
+      "statement": "every verification and credit decision must be kept for audit",
+      "assumptions": []
      }
     ]
    }
@@ -1580,18 +2122,87 @@
    {
     "id": "IR-1",
     "requirement_ids": [
+     "FR-1",
+     "FR-2"
+    ],
+    "name": "Applicant Web Interface",
+    "interface_type": "User interface",
+    "description": "Allows applicants to complete and submit online personal loan application forms and upload KYC documents.",
+    "source_statements": [
+     {
+      "requirement_id": "FR-1",
+      "stakeholder": "Customers and end users",
+      "statement": "Applicants apply online for personal loans",
+      "assumptions": []
+     },
+     {
+      "requirement_id": "FR-2",
+      "stakeholder": "Compliance and legal officers",
+      "statement": "upload identity and address documents for KYC verification",
+      "assumptions": []
+     }
+    ]
+   },
+   {
+    "id": "IR-2",
+    "requirement_ids": [
+     "FR-3",
+     "NFR-3"
+    ],
+    "name": "Credit Bureau Integration Interface",
+    "interface_type": "Software interface",
+    "description": "Enables the system to retrieve applicant credit bureau data for score calculation.",
+    "source_statements": [
+     {
+      "requirement_id": "FR-3",
+      "stakeholder": "Risk-management teams",
+      "statement": "calculates a credit score from credit bureau data and declared income",
+      "assumptions": [
+       "Credit bureau data is retrieved via an automated API"
+      ]
+     },
+     {
+      "requirement_id": "NFR-3",
+      "stakeholder": "Software architects and developers",
+      "statement": "calculates a credit score from credit bureau data and declared income",
+      "assumptions": [
+       "5-second response time is the agreed service level objective for automated scoring"
+      ]
+     }
+    ]
+   },
+   {
+    "id": "IR-3",
+    "requirement_ids": [
+     "FR-4"
+    ],
+    "name": "Approver Queue Interface",
+    "interface_type": "User interface",
+    "description": "Provides a pending secondary approval queue for designated second approvers to review and authorize high-risk loan applications.",
+    "source_statements": [
+     {
+      "requirement_id": "FR-4",
+      "stakeholder": "Risk-management teams",
+      "statement": "Loans above the bank's risk threshold need a second approver",
+      "assumptions": []
+     }
+    ]
+   },
+   {
+    "id": "IR-4",
+    "requirement_ids": [
      "NFR-1"
     ],
-    "name": "Credit bureau API",
-    "interface_type": "Software interface",
-    "description": "Fetch bureau data for scoring",
+    "name": "Secure Communications Network Interface",
+    "interface_type": "Communications interface",
+    "description": "Ensures all data in transit is encrypted using TLS 1.3 or TLS 1.2.",
     "source_statements": [
      {
       "requirement_id": "NFR-1",
-      "stakeholder": "Software architects and developers",
-      "statement": "",
+      "stakeholder": "Information-security teams",
+      "statement": "upload identity and address documents for KYC verification",
       "assumptions": [
-       "5 seconds is acceptable | to applicants"
+       "Encryption standards comply with standard banking security frameworks"
       ]
      }
     ]
@@ -1601,9 +2212,39 @@
    {
     "requirement_id": "FR-1",
     "type": "FR",
-    "requirement": "The system shall verify applicant identity documents.",
+    "requirement": "The system shall allow applicants to submit online personal loan applications.",
     "source": {
      "requirement_id": "FR-1",
+     "stakeholder": "Customers and end users",
+     "statement": "Applicants apply online for personal loans",
+     "assumptions": []
+    },
+    "compliance_sources": [],
+    "risk_ids": [],
+    "user_stories_ids": [
+     "US-1"
+    ],
+    "use_cases_ids": [
+     "UC-1"
+    ],
+    "process_workflows_ids": [
+     "PW-1"
+    ],
+    "data_requirements_ids": [
+     "DR-1"
+    ],
+    "interface_requirements_ids": [
+     "IR-1"
+    ],
+    "workflow_items": [],
+    "approval_status": "proposed"
+   },
+   {
+    "requirement_id": "FR-2",
+    "type": "FR",
+    "requirement": "The system shall allow applicants to upload identity and address documents for KYC verification.",
+    "source": {
+     "requirement_id": "FR-2",
      "stakeholder": "Compliance and legal officers",
      "statement": "upload identity and address documents for KYC verification",
      "assumptions": []
@@ -1612,52 +2253,12 @@
      {
       "source": "kyc_aml",
       "status": "satisfied",
-      "confidence": "High"
+      "confidence": "Medium"
      }
     ],
     "risk_ids": [
-     "RISK-3",
-     "RISK-5"
-    ],
-    "user_stories_ids": [
-     "US-1"
-    ],
-    "use_cases_ids": [],
-    "process_workflows_ids": [
-     "PW-1"
-    ],
-    "data_requirements_ids": [
-     "DR-1"
-    ],
-    "interface_requirements_ids": [],
-    "workflow_items": [
-     "System and architecture design: Threat modelling of the document-upload flow",
-     "Deployment: Compliance approval of the KYC procedure before go-live"
-    ],
-    "approval_status": "proposed"
-   },
-   {
-    "requirement_id": "FR-2",
-    "type": "FR",
-    "requirement": "The system shall tell declined applicants the reason.",
-    "source": {
-     "requirement_id": "FR-2",
-     "stakeholder": "Customers and end users",
-     "statement": "declined applicants must be told the reason",
-     "assumptions": [
-      "Credit bureau API is available"
-     ]
-    },
-    "compliance_sources": [
-     {
-      "source": "fair_lending",
-      "status": "gap",
-      "confidence": "Low"
-     }
-    ],
-    "risk_ids": [
-     "RISK-1",
-     "RISK-2"
+     "RISK-2",
+     "RISK-3"
     ],
     "user_stories_ids": [
      "US-2"
@@ -1668,53 +2269,193 @@
     "process_workflows_ids": [
      "PW-1"
     ],
-    "data_requirements_ids": [],
+    "data_requirements_ids": [
+     "DR-2"
+    ],
+    "interface_requirements_ids": [
+     "IR-1"
+    ],
+    "workflow_items": [
+     "Requirements baseline: Map fair lending rules and audit retention obligations to requirements FR-2, FR-3, FR-5, and FR-6.",
+     "Architecture and verification planning: Perform threat modeling on data flows for KYC document upload and credit scoring integration to mitigate interception and latency risks.",
+     "Iterative development: Perform static and dynamic application security testing focused on encryption at rest and in transit for all personal data and KYC documents.",
+     "System verification: Execute penetration testing specifically targeting data encryption controls for uploaded KYC documents and personal data."
+    ],
+    "approval_status": "proposed"
+   },
+   {
+    "requirement_id": "FR-3",
+    "type": "FR",
+    "requirement": "The system shall calculate a credit score using credit bureau data and declared income.",
+    "source": {
+     "requirement_id": "FR-3",
+     "stakeholder": "Risk-management teams",
+     "statement": "calculates a credit score from credit bureau data and declared income",
+     "assumptions": [
+      "Credit bureau data is retrieved via an automated API"
+     ]
+    },
+    "compliance_sources": [
+     {
+      "source": "fair_lending",
+      "status": "gap",
+      "confidence": "Medium"
+     },
+     {
+      "source": "kyc_aml",
+      "status": "satisfied",
+      "confidence": "Medium"
+     }
+    ],
+    "risk_ids": [
+     "RISK-1",
+     "RISK-2"
+    ],
+    "user_stories_ids": [
+     "US-3"
+    ],
+    "use_cases_ids": [
+     "UC-2"
+    ],
+    "process_workflows_ids": [
+     "PW-1"
+    ],
+    "data_requirements_ids": [
+     "DR-1",
+     "DR-3"
+    ],
+    "interface_requirements_ids": [
+     "IR-2"
+    ],
+    "workflow_items": [
+     "Requirements baseline: Map fair lending rules and audit retention obligations to requirements FR-2, FR-3, FR-5, and FR-6.",
+     "Architecture and verification planning: Perform threat modeling on data flows for KYC document upload and credit scoring integration to mitigate interception and latency risks.",
+     "Iterative development: Incorporate periodic review mechanisms into the automated credit-scoring logic to detect and prevent disparate impact on protected groups.",
+     "Validation and release: Obtain formal compliance sign-off confirming that fair lending periodic review processes and audit log retention mechanisms are active before go-live."
+    ],
+    "approval_status": "proposed"
+   },
+   {
+    "requirement_id": "FR-4",
+    "type": "FR",
+    "requirement": "The system shall route loan applications exceeding the risk threshold to a second approver.",
+    "source": {
+     "requirement_id": "FR-4",
+     "stakeholder": "Risk-management teams",
+     "statement": "Loans above the bank's risk threshold need a second approver",
+     "assumptions": []
+    },
+    "compliance_sources": [
+     {
+      "source": "kyc_aml",
+      "status": "satisfied",
+      "confidence": "Medium"
+     }
+    ],
+    "risk_ids": [],
+    "user_stories_ids": [
+     "US-4"
+    ],
+    "use_cases_ids": [
+     "UC-2"
+    ],
+    "process_workflows_ids": [
+     "PW-1"
+    ],
+    "data_requirements_ids": [
+     "DR-3"
+    ],
+    "interface_requirements_ids": [
+     "IR-3"
+    ],
+    "workflow_items": [],
+    "approval_status": "proposed"
+   },
+   {
+    "requirement_id": "FR-5",
+    "type": "FR",
+    "requirement": "The system shall automatically generate and send a decline reason to applicants whose loans are declined.",
+    "source": {
+     "requirement_id": "FR-5",
+     "stakeholder": "Compliance and legal officers",
+     "statement": "declined applicants must be told the reason",
+     "assumptions": []
+    },
+    "compliance_sources": [
+     {
+      "source": "fair_lending",
+      "status": "satisfied",
+      "confidence": "Medium"
+     }
+    ],
+    "risk_ids": [],
+    "user_stories_ids": [
+     "US-5"
+    ],
+    "use_cases_ids": [
+     "UC-2"
+    ],
+    "process_workflows_ids": [
+     "PW-1"
+    ],
+    "data_requirements_ids": [
+     "DR-3"
+    ],
     "interface_requirements_ids": [],
     "workflow_items": [
-     "System and acceptance testing: Decline-reason content tests for every decline path"
+     "Requirements baseline: Map fair lending rules and audit retention obligations to requirements FR-2, FR-3, FR-5, and FR-6.",
+     "System verification: Collect and verify audit log retention and automated decline notification records to ensure regulatory traceability."
+    ],
+    "approval_status": "proposed"
+   },
+   {
+    "requirement_id": "FR-6",
+    "type": "FR",
+    "requirement": "The system shall log and retain every verification and credit decision for audit purposes.",
+    "source": {
+     "requirement_id": "FR-6",
+     "stakeholder": "Auditors and regulators",
+     "statement": "every verification and credit decision must be kept for audit",
+     "assumptions": []
+    },
+    "compliance_sources": [
+     {
+      "source": "fair_lending",
+      "status": "satisfied",
+      "confidence": "Medium"
+     }
+    ],
+    "risk_ids": [],
+    "user_stories_ids": [
+     "US-6"
+    ],
+    "use_cases_ids": [
+     "UC-2"
+    ],
+    "process_workflows_ids": [
+     "PW-1"
+    ],
+    "data_requirements_ids": [
+     "DR-4"
+    ],
+    "interface_requirements_ids": [],
+    "workflow_items": [
+     "Requirements baseline: Map fair lending rules and audit retention obligations to requirements FR-2, FR-3, FR-5, and FR-6.",
+     "System verification: Collect and verify audit log retention and automated decline notification records to ensure regulatory traceability.",
+     "Validation and release: Obtain formal compliance sign-off confirming that fair lending periodic review processes and audit log retention mechanisms are active before go-live."
     ],
     "approval_status": "proposed"
    },
    {
     "requirement_id": "NFR-1",
     "type": "NFR",
-    "requirement": "The system shall return a credit decision within 5 seconds.",
+    "requirement": "The system shall encrypt all uploaded KYC documents and personal data both in transit and at rest.",
     "source": {
      "requirement_id": "NFR-1",
-     "stakeholder": "Software architects and developers",
-     "statement": "",
-     "assumptions": [
-      "5 seconds is acceptable | to applicants"
-     ]
-    },
-    "compliance_sources": [],
-    "risk_ids": [
-     "RISK-1"
-    ],
-    "user_stories_ids": [],
-    "use_cases_ids": [
-     "UC-1"
-    ],
-    "process_workflows_ids": [
-     "PW-1"
-    ],
-    "data_requirements_ids": [],
-    "interface_requirements_ids": [
-     "IR-1"
-    ],
-    "workflow_items": [],
-    "approval_status": "proposed"
-   },
-   {
-    "requirement_id": "NFR-2",
-    "type": "NFR",
-    "requirement": "The system shall encrypt uploaded identity documents in transit and at rest.",
-    "source": {
-     "requirement_id": "NFR-2",
      "stakeholder": "Information-security teams",
-     "statement": "",
+     "statement": "upload identity and address documents for KYC verification",
      "assumptions": [
-      "Documents are stored by the bank, not a third party"
+      "Encryption standards comply with standard banking security frameworks"
      ]
     },
     "compliance_sources": [
@@ -1722,87 +2463,237 @@
       "source": "data_protection",
       "status": "satisfied",
       "confidence": "Medium"
-     },
+     }
+    ],
+    "risk_ids": [
+     "RISK-3"
+    ],
+    "user_stories_ids": [],
+    "use_cases_ids": [],
+    "process_workflows_ids": [],
+    "data_requirements_ids": [
+     "DR-2"
+    ],
+    "interface_requirements_ids": [
+     "IR-4"
+    ],
+    "workflow_items": [
+     "Architecture and verification planning: Perform threat modeling on data flows for KYC document upload and credit scoring integration to mitigate interception and latency risks.",
+     "Iterative development: Perform static and dynamic application security testing focused on encryption at rest and in transit for all personal data and KYC documents.",
+     "System verification: Execute penetration testing specifically targeting data encryption controls for uploaded KYC documents and personal data."
+    ],
+    "approval_status": "proposed"
+   },
+   {
+    "requirement_id": "NFR-2",
+    "type": "NFR",
+    "requirement": "The system shall maintain an operational uptime of at least 99.9% during banking hours.",
+    "source": {
+     "requirement_id": "NFR-2",
+     "stakeholder": "Operations personnel",
+     "statement": "",
+     "assumptions": [
+      "Banking hours are defined as 9:00 AM to 6:00 PM local time, Monday through Saturday"
+     ]
+    },
+    "compliance_sources": [
      {
       "source": "general_security_baseline",
       "status": "satisfied",
       "confidence": "Medium"
      }
     ],
+    "risk_ids": [],
+    "user_stories_ids": [],
+    "use_cases_ids": [],
+    "process_workflows_ids": [],
+    "data_requirements_ids": [],
+    "interface_requirements_ids": [],
+    "workflow_items": [
+     "Architecture and verification planning: Plan performance and latency load tests to verify the 5-second end-to-end processing threshold under peak banking hours.",
+     "System verification: Run end-to-end performance and reliability tests verifying compliance with the 5-second response time and 99.9% uptime requirement during banking hours."
+    ],
+    "approval_status": "proposed"
+   },
+   {
+    "requirement_id": "NFR-3",
+    "type": "NFR",
+    "requirement": "The system shall complete the credit score calculation and decision routing within 5 seconds of application submission.",
+    "source": {
+     "requirement_id": "NFR-3",
+     "stakeholder": "Software architects and developers",
+     "statement": "calculates a credit score from credit bureau data and declared income",
+     "assumptions": [
+      "5-second response time is the agreed service level objective for automated scoring"
+     ]
+    },
+    "compliance_sources": [],
     "risk_ids": [
-     "RISK-4"
+     "RISK-2"
     ],
     "user_stories_ids": [],
     "use_cases_ids": [],
     "process_workflows_ids": [],
-    "data_requirements_ids": [
-     "DR-1"
+    "data_requirements_ids": [],
+    "interface_requirements_ids": [
+     "IR-2"
     ],
-    "interface_requirements_ids": [],
     "workflow_items": [
-     "System and architecture design: Threat modelling of the document-upload flow"
+     "Architecture and verification planning: Perform threat modeling on data flows for KYC document upload and credit scoring integration to mitigate interception and latency risks.",
+     "Architecture and verification planning: Plan performance and latency load tests to verify the 5-second end-to-end processing threshold under peak banking hours.",
+     "System verification: Run end-to-end performance and reliability tests verifying compliance with the 5-second response time and 99.9% uptime requirement during banking hours."
     ],
     "approval_status": "proposed"
    }
   ],
   "compliance_control_matrix": [
    {
-    "requirement_id": "FR-1",
+    "requirement_id": "FR-2",
     "regulation": "Know Your Customer (KYC) and Anti-Money Laundering (AML) Principles",
     "source": "kyc_aml",
     "scope": "domain-specific",
     "jurisdiction": "India; principles common to most jurisdictions",
     "version": "1",
     "effective_date": "2026-11-25",
-    "required_control": "Verify identity documents and keep a record of verification decisions.",
+    "required_control": "Expectation to include identity document capture and verification, address verification, a risk-scoring step to classify customer risk level, and an audit trail of verification decisions.",
     "status": "satisfied",
     "compliance_gap": null,
-    "evidence": "A digital loan origination or account-opening system should therefore typically include: identity",
+    "evidence": "identity document capture and verification, address verification, a risk-scoring step to classify customer risk level, and an audit trail of verification decisions",
     "evidence_verified": true,
-    "checkpoints": [
-     "Compliance sign-off of the KYC procedure before go-live"
-    ],
+    "checkpoints": [],
     "retention_and_reporting": [
-     "Retain verification records"
+     "Retain verification records for audit purposes"
     ],
-    "confidence": "High",
+    "confidence": "Medium",
     "needs_human_review": false
    },
    {
-    "requirement_id": "FR-2",
+    "requirement_id": "FR-3",
     "regulation": "Fair Lending and Responsible Credit Assessment Principles",
     "source": "fair_lending",
     "scope": "domain-specific",
     "jurisdiction": "India; principles common to most jurisdictions",
     "version": "1",
     "effective_date": "2026-11-25",
-    "required_control": "Give declined borrowers a reason for the decision.",
+    "required_control": "Expectations for automated or algorithmic credit-scoring components regarding periodic review of scoring logic for disparate impact on protected groups.",
     "status": "gap",
-    "compliance_gap": "No process for a borrower to request the reason later.",
-    "evidence": "Automated or algorithmic credit-scoring components carry additional expectations: the scoring",
+    "compliance_gap": "The requirements do not specify periodic reviews of automated credit-scoring logic for disparate impact on protected groups.",
+    "evidence": "the scoring logic should be periodically reviewed for disparate impact on protected groups",
     "evidence_verified": true,
-    "checkpoints": [],
+    "checkpoints": [
+     "Periodic review of scoring logic for disparate impact"
+    ],
     "retention_and_reporting": [],
-    "confidence": "Low",
+    "confidence": "Medium",
     "needs_human_review": true
    },
    {
-    "requirement_id": "NFR-2",
+    "requirement_id": "FR-3",
+    "regulation": "Know Your Customer (KYC) and Anti-Money Laundering (AML) Principles",
+    "source": "kyc_aml",
+    "scope": "domain-specific",
+    "jurisdiction": "India; principles common to most jurisdictions",
+    "version": "1",
+    "effective_date": "2026-11-25",
+    "required_control": "Expectation to capture enough identity and background information to support a risk-based assessment.",
+    "status": "satisfied",
+    "compliance_gap": null,
+    "evidence": "capture enough identity and background information to support a risk-based assessment",
+    "evidence_verified": true,
+    "checkpoints": [],
+    "retention_and_reporting": [],
+    "confidence": "Medium",
+    "needs_human_review": true
+   },
+   {
+    "requirement_id": "FR-4",
+    "regulation": "Know Your Customer (KYC) and Anti-Money Laundering (AML) Principles",
+    "source": "kyc_aml",
+    "scope": "domain-specific",
+    "jurisdiction": "India; principles common to most jurisdictions",
+    "version": "1",
+    "effective_date": "2026-11-25",
+    "required_control": "Expectation to apply enhanced due diligence or risk-based assessment for higher-risk customers.",
+    "status": "satisfied",
+    "compliance_gap": null,
+    "evidence": "higher-risk customers or transaction patterns typically warrant deeper verification",
+    "evidence_verified": true,
+    "checkpoints": [],
+    "retention_and_reporting": [],
+    "confidence": "Medium",
+    "needs_human_review": false
+   },
+   {
+    "requirement_id": "FR-5",
+    "regulation": "Fair Lending and Responsible Credit Assessment Principles",
+    "source": "fair_lending",
+    "scope": "domain-specific",
+    "jurisdiction": "India; principles common to most jurisdictions",
+    "version": "1",
+    "effective_date": "2026-11-25",
+    "required_control": "Expectation that borrowers who are declined receive a reason for the decision, not just a rejection notice.",
+    "status": "satisfied",
+    "compliance_gap": null,
+    "evidence": "borrowers who are declined should generally receive a reason for the decision, not just a rejection notice",
+    "evidence_verified": true,
+    "checkpoints": [],
+    "retention_and_reporting": [],
+    "confidence": "Medium",
+    "needs_human_review": false
+   },
+   {
+    "requirement_id": "FR-6",
+    "regulation": "Fair Lending and Responsible Credit Assessment Principles",
+    "source": "fair_lending",
+    "scope": "domain-specific",
+    "jurisdiction": "India; principles common to most jurisdictions",
+    "version": "1",
+    "effective_date": "2026-11-25",
+    "required_control": "Expectation to maintain an audit trail of verification decisions.",
+    "status": "satisfied",
+    "compliance_gap": null,
+    "evidence": "borrowers who are declined should generally receive a reason for the decision, not just a rejection notice",
+    "evidence_verified": true,
+    "checkpoints": [],
+    "retention_and_reporting": [],
+    "confidence": "Medium",
+    "needs_human_review": false
+   },
+   {
+    "requirement_id": "NFR-1",
     "regulation": "Data Protection and Privacy Principles",
     "source": "data_protection",
     "scope": "domain-specific",
     "jurisdiction": "India; principles common to comparable frameworks elsewhere",
     "version": "1",
     "effective_date": "2026-11-25",
-    "required_control": "Encrypt sensitive personal data in transit and at rest.",
+    "required_control": "Expectation for encryption of data at rest and in transit.",
     "status": "satisfied",
     "compliance_gap": null,
-    "evidence": "Modern data protection frameworks (such as India's Digital Personal Data",
+    "evidence": "encryption of data at rest and in transit",
     "evidence_verified": true,
     "checkpoints": [],
     "retention_and_reporting": [],
     "confidence": "Medium",
-    "needs_human_review": false
+    "needs_human_review": true
+   },
+   {
+    "requirement_id": "NFR-1",
+    "regulation": "General Security and Privacy Baseline (Domain-Agnostic)",
+    "source": "general_security_baseline",
+    "scope": "generic baseline",
+    "jurisdiction": "Not jurisdiction-specific",
+    "version": "1",
+    "effective_date": "2026-11-25",
+    "required_control": "",
+    "status": "not_assessed",
+    "compliance_gap": null,
+    "evidence": "",
+    "evidence_verified": false,
+    "checkpoints": [],
+    "retention_and_reporting": [],
+    "confidence": "Low",
+    "needs_human_review": true
    },
    {
     "requirement_id": "NFR-2",
@@ -1812,41 +2703,79 @@
     "jurisdiction": "Not jurisdiction-specific",
     "version": "1",
     "effective_date": "2026-11-25",
-    "required_control": "Baseline: encryption and access control for sensitive data.",
+    "required_control": "Expectation for operational uptime and reliability as part of a system's duty of care.",
     "status": "satisfied",
     "compliance_gap": null,
-    "evidence": "Regardless of industry, most modern software systems that handle user",
+    "evidence": "Availability and reliability expectations, while not always a formal compliance requirement, are commonly treated as part of a system's duty of care",
     "evidence_verified": true,
     "checkpoints": [],
     "retention_and_reporting": [],
     "confidence": "Medium",
     "needs_human_review": false
+   },
+   {
+    "requirement_id": "NFR-3",
+    "regulation": "Fair Lending and Responsible Credit Assessment Principles",
+    "source": "fair_lending",
+    "scope": "domain-specific",
+    "jurisdiction": "India; principles common to most jurisdictions",
+    "version": "1",
+    "effective_date": "2026-11-25",
+    "required_control": "Expectation for credit-scoring components under fair lending.",
+    "status": "not_applicable",
+    "compliance_gap": null,
+    "evidence": "Automated or algorithmic credit-scoring components carry additional expectations",
+    "evidence_verified": true,
+    "checkpoints": [],
+    "retention_and_reporting": [],
+    "confidence": "Medium",
+    "needs_human_review": true
    }
   ],
   "assumptions_register": {
    "assumptions": [
     {
      "id": "A-1",
-     "text": "Credit bureau API is available",
+     "text": "KYC verification includes identity and address document validation",
      "scope": "project",
-     "requirement_ids": [
-      "FR-2"
-     ]
+     "requirement_ids": []
     },
     {
      "id": "A-2",
-     "text": "5 seconds is acceptable | to applicants",
+     "text": "Credit bureau data is retrieved via a third-party API integration",
+     "scope": "project",
+     "requirement_ids": []
+    },
+    {
+     "id": "A-3",
+     "text": "Credit bureau data is retrieved via an automated API",
+     "scope": "requirement",
+     "requirement_ids": [
+      "FR-3"
+     ]
+    },
+    {
+     "id": "A-4",
+     "text": "Encryption standards comply with standard banking security frameworks",
      "scope": "requirement",
      "requirement_ids": [
       "NFR-1"
      ]
     },
     {
-     "id": "A-3",
-     "text": "Documents are stored by the bank, not a third party",
+     "id": "A-5",
+     "text": "Banking hours are defined as 9:00 AM to 6:00 PM local time, Monday through Saturday",
      "scope": "requirement",
      "requirement_ids": [
       "NFR-2"
+     ]
+    },
+    {
+     "id": "A-6",
+     "text": "5-second response time is the agreed service level objective for automated scoring",
+     "scope": "requirement",
+     "requirement_ids": [
+      "NFR-3"
      ]
     }
    ],
@@ -1858,9 +2787,34 @@
      ]
     },
     {
+     "requirement_id": "FR-3",
+     "depends_on": [
+      "FR-1"
+     ]
+    },
+    {
+     "requirement_id": "FR-4",
+     "depends_on": [
+      "FR-3"
+     ]
+    },
+    {
+     "requirement_id": "FR-5",
+     "depends_on": [
+      "FR-3"
+     ]
+    },
+    {
+     "requirement_id": "FR-6",
+     "depends_on": [
+      "FR-2",
+      "FR-3",
+      "FR-4"
+     ]
+    },
+    {
      "requirement_id": "NFR-1",
      "depends_on": [
-      "FR-1",
       "FR-2"
      ]
     },
@@ -1869,6 +2823,13 @@
      "depends_on": [
       "FR-1"
      ]
+    },
+    {
+     "requirement_id": "NFR-3",
+     "depends_on": [
+      "FR-3",
+      "FR-4"
+     ]
     }
    ]
   },
@@ -1876,73 +2837,99 @@
    {
     "id": "ISSUE-1",
     "type": "conflict",
-    "description": "Waiting for the credit bureau can exceed the 5-second decision target. Suggested fix: Cache bureau data or relax the target for bureau timeouts.",
+    "description": "FR-2 requires document upload for KYC verification upon submission, while NFR-3 requires completing credit score calculation and decision routing within 5 seconds of application submission. Document upload and external KYC verification processes typically introduce latency that conflicts with the strict 5-second end-to-end performance threshold. Suggested fix: Clarify that NFR-3 applies only to the credit score and routing engine by excluding document upload time from the 5-second window, or make document upload an asynchronous step.",
     "requirement_ids": [
      "FR-2",
-     "NFR-1"
+     "NFR-3"
     ],
     "origin": "quality check (llm)"
    },
    {
     "id": "ISSUE-2",
     "type": "compliance review",
-    "description": "fair_lending: low-confidence match (distance 0.61)",
+    "description": "fair_lending: compliance gap on a high-risk requirement; the interpretation needs compliance or legal approval",
     "requirement_ids": [
-     "FR-2"
+     "FR-3"
     ],
     "origin": "compliance mapping"
    },
    {
     "id": "ISSUE-3",
-    "type": "pending approval",
-    "description": "4 requirement(s) are proposed and not yet approved (requirement baseline).",
+    "type": "compliance review",
+    "description": "general_security_baseline: retrieval matched this requirement but the analysis did not assess it",
     "requirement_ids": [
-     "FR-1",
-     "FR-2",
-     "NFR-1",
-     "NFR-2"
+     "NFR-1"
     ],
-    "origin": "requirement records"
+    "origin": "compliance mapping"
    },
    {
     "id": "ISSUE-4",
-    "type": "unverified",
-    "description": "Requirement(s) have no quote from a stakeholder statement and rest on assumptions only.",
+    "type": "compliance review",
+    "description": "fair_lending: retrieval matched this requirement but the analysis judged it not applicable (ambiguous match)",
     "requirement_ids": [
-     "NFR-1",
-     "NFR-2"
+     "NFR-3"
     ],
-    "origin": "requirement records"
+    "origin": "compliance mapping"
    },
    {
     "id": "ISSUE-5",
     "type": "pending approval",
-    "description": "SDLC model V-Model awaits approval by Project manager, Architect, Security team, Compliance officer.",
-    "requirement_ids": [],
-    "origin": "SDLC recommendation"
+    "description": "9 requirement(s) are proposed and not yet approved (requirement baseline).",
+    "requirement_ids": [
+     "FR-1",
+     "FR-2",
+     "FR-3",
+     "FR-4",
+     "FR-5",
+     "FR-6",
+     "NFR-1",
+     "NFR-2",
+     "NFR-3"
+    ],
+    "origin": "requirement records"
    },
    {
     "id": "ISSUE-6",
-    "type": "close call",
-    "description": "V-Model is within 5 points of Waterfall (77.2%); review the choice.",
+    "type": "unverified",
+    "description": "Requirement(s) have no quote from a stakeholder statement and rest on assumptions only.",
+    "requirement_ids": [
+     "NFR-2"
+    ],
+    "origin": "requirement records"
+   },
+   {
+    "id": "ISSUE-7",
+    "type": "pending approval",
+    "description": "SDLC model Agile-V awaits approval by Project manager, Architect, Security team, Compliance officer.",
     "requirement_ids": [],
     "origin": "SDLC recommendation"
    },
    {
-    "id": "ISSUE-7",
+    "id": "ISSUE-8",
+    "type": "close call",
+    "description": "Agile-V is within 5 points of V-Model (77.9%); review the choice.",
+    "requirement_ids": [],
+    "origin": "SDLC recommendation"
+   },
+   {
+    "id": "ISSUE-9",
     "type": "unverified",
-    "description": "6 generated artefact item(s) (user stories, use cases, workflows, data and interface requirements) are LLM output that nobody has reviewed yet.",
+    "description": "17 generated artefact item(s) (user stories, use cases, workflows, data and interface requirements) are LLM output that nobody has reviewed yet.",
     "requirement_ids": [],
     "origin": "artefact generation"
    },
    {
-    "id": "ISSUE-8",
+    "id": "ISSUE-10",
     "type": "unverified",
-    "description": "3 scenario-specific workflow item(s) were added by the LLM and are not reviewed yet.",
+    "description": "9 scenario-specific workflow item(s) were added by the LLM and are not reviewed yet.",
     "requirement_ids": [
-     "FR-1",
      "FR-2",
-     "NFR-2"
+     "FR-3",
+     "FR-5",
+     "FR-6",
+     "NFR-1",
+     "NFR-2",
+     "NFR-3"
     ],
     "origin": "workflow generator"
    }
@@ -1954,12 +2941,24 @@
   }
  },
  "meta": {
-  "model": null,
-  "models_used": [],
+  "model": "gemini-3.5-flash-lite",
+  "models_used": [
+   "gemini-3.5-flash-lite",
+   "gemini-3.5-flash-lite",
+   "gemini-3.5-flash-lite",
+   "gemini-3.5-flash-lite",
+   "gemini-3.5-flash-lite",
+   "gemini-3.5-flash-lite",
+   "gemini-3.5-flash-lite",
+   "gemini-3.5-flash-lite",
+   "gemini-3.5-flash-lite"
+  ],
   "app_version": "0.5.1",
   "kb_version": "kb-736d1d3a3860",
   "embedding_model": "gemini-embedding-001",
-  "models": []
+  "models": [
+   "gemini-3.5-flash-lite"
+  ]
  },
  "masking": {
   "counts": {
@@ -1977,17 +2976,19 @@
   "app_version": "0.5.1",
   "kb_version": "kb-736d1d3a3860",
   "embedding_model": "gemini-embedding-001",
-  "models": []
+  "models": [
+   "gemini-3.5-flash-lite"
+  ]
  },
- "run_id": "bdd676c8d91a",
+ "run_id": "9a074f769953",
  "srs": {
-  "id": "bdd676c8d91a",
-  "markdown_url": "/agents/srs/bdd676c8d91a?format=markdown",
-  "html_url": "/agents/srs/bdd676c8d91a?format=html",
+  "id": "9a074f769953",
+  "markdown_url": "/agents/srs/9a074f769953?format=markdown",
+  "html_url": "/agents/srs/9a074f769953?format=html",
   "note": "Stored in the local database with the run; the SRS shows the current approval state."
  },
  "_sample": {
   "label": "Recorded sample, not a live run",
-  "note": "Generated offline by scripts/make_sample_run.py from the test fixture's data with mocked model replies and real knowledge-base paragraphs. Replace it with a recorded live run."
+  "note": "Recorded from a live /agents/pipeline run on 2026-11-26 (gemini-3.5-flash-lite; the request took 58.5 s). Loading it calls no model; approvals are disabled because the run is not stored on this server."
  }
 }

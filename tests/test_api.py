@@ -267,3 +267,46 @@ def test_requirement_agent_runs_at_low_temperature(monkeypatch):
 def test_api_is_branded_requora():
     assert app.title.startswith("Requora AI")
     assert client.get("/openapi.json").json()["info"]["title"].startswith("Requora AI")
+
+
+# --- validation-retry reasons in the audit log (live run 2026-11-26: an artefact reply was retried, reason unknown) ---
+
+def _stage_events(run_id, stage, action="stage_run"):
+    from app.audit import query_events
+    return [e for e in query_events(run_id=run_id, action=action) if e["stage"] == stage]
+
+
+def test_pipeline_audit_event_records_why_a_reply_was_retried(monkeypatch):
+    seen = {"n": 0}
+
+    def flaky(prompt, temperature=0.3):
+        if ARTEFACT_PROMPT_MARKER in prompt and seen["n"] == 0:
+            seen["n"] += 1
+            return artefact_reply(("FR-1",))            # FR-2 has no user story: rejected, then retried
+        return fake_llm(prompt, temperature)
+    monkeypatch.setattr(artefact_mod, "generate_text", flaky)
+    r = client.post("/agents/pipeline", json={"scenario": "A payroll system for a large company"})
+    assert r.status_code == 200
+    run_id = r.json()["run_id"]
+    [event] = _stage_events(run_id, "artefacts")
+    [retry] = event["details"]["validation_retries"]
+    assert retry["schema"] == "AllArtefacts" and retry["attempt"] == 1 and "FR-2" in retry["reason"]
+    assert "validation_retries" not in _stage_events(run_id, "requirements")[0]["details"]   # only where it happened
+    assert set(retry) == {"schema", "attempt", "reason"}                                    # reason text, not the reply
+
+
+def test_failed_stage_event_records_both_rejected_attempts(monkeypatch):
+    monkeypatch.setattr(quality_mod, "generate_text", lambda p, temperature=0.3: json.dumps({"conflicts": "none"}))
+    assert client.post("/agents/quality", json=BODY).status_code == 502
+    from app.audit import query_events
+    event = [e for e in query_events(action="stage_failed") if e["stage"] == "quality"][-1]
+    assert [x["attempt"] for x in event["details"]["validation_retries"]] == [1, 2]
+
+
+def test_retry_reasons_are_masked():
+    from app.input_guard import Guard
+    from app.main import _retry_details
+    out = _retry_details([{"schema": "S", "attempt": 1, "reason": "quote 'write to ravi.k@example.com' not found"}],
+                         Guard("business analyst"))
+    assert "ravi.k@example.com" not in json.dumps(out) and "[EMAIL_1]" in out["validation_retries"][0]["reason"]
+    assert _retry_details([], Guard("business analyst")) == {}

@@ -74,6 +74,7 @@ Instructions:
 - Only make compliance claims that are actually supported by the retrieved context above. Do not invent regulatory requirements not present in the context.
 - Every consideration must cite one source name exactly as written after "Source:" above. Allowed sources: {allowed_sources}. Never cite anything else (no law names, articles or standards that are not one of these source names).
 - Reference only requirement IDs that appear in the lists above.
+- Link a consideration only to the requirements it is actually about: the ones whose own wording the control applies to. A chunk listing several matched requirement IDs does not mean the consideration concerns all of them. If a requirement meets one part of a source and misses another, give it its own consideration rather than adding it to a broad one. A gap in the project as a whole belongs only to the requirement it most directly concerns.
 - If knowledge base relevance is "not_relevant", cite only generic baseline sources (if any), and say in the summary that the knowledge base has no domain-specific coverage for this domain.
 - Never present a generic baseline principle as a domain-specific regulation.
 - Assess every requirement-source match shown above. For each consideration give:
