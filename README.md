@@ -187,4 +187,5 @@ python scripts/run_eval.py --check  # validate the evaluation cases
 
 ## Author
 
-Darshan, B.Tech Computer Science and Engineering, NIT Karnataka, Surathkal.
+B Darshan Sai Naath
+241CS114
