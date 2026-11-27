@@ -4,7 +4,7 @@ An agentic AI assistant that turns a plain-language project scenario from a bank
 
 Built for the Software Engineering course (NIT Karnataka, Surathkal) by Darshan.
 
-![Component diagram](docs/diagrams/component_diagram.png)
+![Component diagram](docs/diagrams/02_component.png)
 
 ## The idea in one rule
 
@@ -42,7 +42,7 @@ The model extracts requirements, rates project traits and drafts text. It never 
 
 That is 8 LLM calls and 1 embedding call per run. The default text model is `gemini-3.5-flash-lite` with fallbacks; embeddings use `gemini-embedding-001`. Every reply is validated against a schema and retried once with the reason before the run fails.
 
-![Pipeline sequence](docs/diagrams/sequence_diagram.png)
+![Pipeline sequence](docs/diagrams/04_sequence.png)
 
 See [docs/CODE_MAP.md](docs/CODE_MAP.md) for the file and function behind every step.
 
@@ -98,7 +98,7 @@ If the `chroma_db` folder is missing, build the knowledge base once with `python
 
 The SDLC choice becomes approved only when the project manager, architect, security officer and compliance officer all accept the same version. The baseline can be frozen only when every requirement and every domain-specific compliance mapping is approved. The role menu is a stand-in for real login.
 
-![Use case diagram](docs/diagrams/usecase_diagram.png)
+![Use case diagram](docs/diagrams/01_use_case.png)
 
 ## Safety and privacy
 
@@ -187,5 +187,4 @@ python scripts/run_eval.py --check  # validate the evaluation cases
 
 ## Author
 
-B Darshan Sai Naath
-241CS114
+Darshan, B.Tech Computer Science and Engineering, NIT Karnataka, Surathkal.
