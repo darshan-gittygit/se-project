@@ -241,6 +241,13 @@ console.log(JSON.stringify({
     assert r["one"] == "1 requirement (1 mapping)"
 
 
+def test_running_timer_updates_text_only_so_the_spinner_keeps_turning():
+    """The 500 ms timer must not rebuild the sidebar: that recreates the spinner and restarts its animation."""
+    body = re.search(r"S\.timer = setInterval\(function \(\) \{(.*?)\}, 500\);", APP_JS, re.S).group(1)
+    assert not re.search(r"\brender(Sidebar|Panel)?\(|innerHTML", body), body
+    assert '.stage-btn[data-tab="scenario"] .stage-sum' in body and 'textContent = stageInfo("scenario").sum' in body
+
+
 def test_no_raw_type_and_id_labels_left():
     # "sdlc sdlc" came from joining item_type and item_id directly
     assert 'item_type + " " + ' not in APP_JS and 'esc(type + " " + id)' not in APP_JS

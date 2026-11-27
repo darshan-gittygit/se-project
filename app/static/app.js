@@ -824,7 +824,8 @@
     S.running = true; S.startedAt = Date.now();
     S.timer = setInterval(function () {
       var el = $("elapsed"); if (el) el.textContent = fmtTime(Date.now() - S.startedAt);
-      renderSidebar();
+      // Only the "Running, 0:03" text: rebuilding the sidebar would recreate the spinner and restart its animation.
+      var sum = document.querySelector('.stage-btn[data-tab="scenario"] .stage-sum'); if (sum) sum.textContent = stageInfo("scenario").sum;
     }, 500);
     render();
     var body = { scenario: S.input.scenario, answers: S.input.answers.map(function (a) {
