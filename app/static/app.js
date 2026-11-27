@@ -95,6 +95,12 @@
     return sec ? ["security officer"] : ["business analyst", "product owner"];
   }
   function live() { return S.result && !S.sample && S.run; }
+  function typeLabel(t) { return { requirement: "Requirement", compliance: "Compliance", sdlc: "SDLC", baseline: "Baseline" }[t] || cap(t); }
+  function itemLabel(t, id) { return t === "sdlc" ? "SDLC selection" : t === "baseline" ? "Requirement baseline" : typeLabel(t) + " " + id; }
+  function itemName(t, id) { return t === "sdlc" ? "SDLC selection" : id; }
+  function stepText(s) { var t = String(s == null ? "" : s).trim(); return t.replace(/^\s*(?:step\s+)?\d+[.):]\s+/i, "").trim() || t; }
+  function reviewCounts(cm) { var f = ((cm || {}).requirements || []).filter(function (e) { return e.needs_human_review; }); return { reqs: f.length, maps: f.reduce(function (n, e) { return n + (e.mappings || []).length; }, 0) }; }
+  function reviewText(c) { return c.reqs + " requirement" + (c.reqs === 1 ? "" : "s") + " (" + c.maps + " mapping" + (c.maps === 1 ? "" : "s") + ")"; }
   function intro(title, sentence, aside) {
     return '<div class="tab-intro"><div><h2>' + esc(title) + "</h2><p>" + esc(sentence) + "</p></div>" + (aside || "") + "</div>";
   }
@@ -173,7 +179,7 @@
     var body = esc(e && e.message ? e.message : String(e));
     if (e && e.data && e.data.blockers) {
       body += "<ul>" + e.data.blockers.map(function (b) {
-        return "<li>" + esc(b.item_type + " " + b.item_id + " v" + b.version + " is " + b.status) + "</li>";
+        return "<li>" + esc(itemLabel(b.item_type, b.item_id) + " v" + b.version + " is " + b.status) + "</li>";
       }).join("") + "</ul>";
     }
     addBanner("error", "<strong>" + esc(head) + (context ? " - " + esc(context) : "") + ":</strong> " + body);
@@ -216,9 +222,9 @@
       return { st: q ? "attention" : "done", sum: allReqs().length + " requirements, " + q + " flag" + (q === 1 ? "" : "s") };
     }
     if (id === "compliance") {
-      var rc = r.compliance_mapping ? r.compliance_mapping.review_count : 0;
+      var rc = reviewCounts(r.compliance_mapping).reqs;
       var nr = r.risk_register ? r.risk_register.risks.length : 0;
-      return { st: rc ? "attention" : "done", sum: rc + " to review, " + nr + " risks" };
+      return { st: rc ? "attention" : "done", sum: rc + " need review, " + nr + " risks" };
     }
     if (id === "sdlc") {
       var s = r.sdlc_recommendation;
@@ -332,7 +338,7 @@
     if (!S.result) return needResult("analysis");
     var r = S.result, s = r.sdlc_recommendation || {}, a = r.artefacts || {};
     var high = ((r.risk_register || {}).risks || []).filter(function (x) { return x.level === "High"; }).length;
-    var review = (r.compliance_mapping || {}).review_count || 0;
+    var review = reviewCounts(r.compliance_mapping);
     var arts = GENERATED.reduce(function (n, k) { return n + (a[k] || []).length; }, 0);
     function tile(n, label, sub, tab) {
       return '<button type="button" class="tile" data-action="tab" data-tab="' + tab + '"><span class="stat">' + n + '</span><span class="tile-label">' + esc(label) +
@@ -345,7 +351,7 @@
       heroCard(s) +
       '<div class="tiles">' + tile(allReqs().length, "Requirements", "functional and non-functional", "requirements") +
       tile(high, "High risks", "in the risk register", "compliance") +
-      tile(review, "Need review", "compliance mappings flagged for a person", "compliance") +
+      tile(review.reqs, "Need review", reviewText(review) + " flagged for a person", "compliance") +
       tile(arts, "Artefacts", "stories, use cases, workflows, data, interfaces", "artefacts") + "</div>" +
       '<div class="card"><div class="card-head"><h3>Requirement baseline</h3>' + (S.sample ? badge("Sample", true) : S.run ? statusBadge(S.run.baseline.status) : "") + "</div>" +
       "<p>" + esc(baseline) + "</p>" +
@@ -503,7 +509,7 @@
       '<div><div class="stat-label">Overall compliance risk</div><div>' + level(c.risk_level) + "</div></div>" +
       '<div><div class="stat-label">Knowledge-base coverage</div><div>' + badge(cap(c.kb_relevance || "-"), c.kb_relevance && c.kb_relevance !== "relevant") + "</div></div>" +
       '<div><div class="stat-label">Sources used</div><div>' + esc((c.sources_used || []).join(", ") || "-") + "</div></div>" +
-      '<div><div class="stat-label">Need review</div><div class="stat">' + (cm.review_count || 0) + "</div></div></div>" +
+      '<div><div class="stat-label">Need review</div><div class="stat">' + reviewCounts(cm).reqs + '</div><div class="muted">' + esc(reviewText(reviewCounts(cm))) + "</div></div></div>" +
       (c.summary ? '<p class="summary-line">' + esc(c.summary) + "</p>" : "") +
       (c.kb_relevance && c.kb_relevance !== "relevant" ? '<p class="notice">The knowledge base does not cover this domain well; findings are limited to what was retrieved.</p>' : "") + "</div>";
 
@@ -696,7 +702,7 @@
     } else if (t === "usecases") {
       h += (a.use_cases || []).map(function (u) {
         return '<div class="card"><div class="card-head"><h3>' + esc(u.id + " " + u.name) + '</h3><span class="muted">' + ids(u.requirement_ids) + "</span></div><p>Primary actor: <strong>" + esc(u.primary_actor) +
-          '</strong></p><div class="grid-2"><div><h4>Main flow</h4><ol>' + (u.main_flow || []).map(function (s) { return "<li>" + esc(s) + "</li>"; }).join("") +
+          '</strong></p><div class="grid-2"><div><h4>Main flow</h4><ol>' + (u.main_flow || []).map(function (s) { return "<li>" + esc(stepText(s)) + "</li>"; }).join("") +
           "</ol><h4>Alternative flows</h4>" + list(u.alternative_flows) + "</div><div><h4>Preconditions</h4>" + list(u.preconditions) + "<h4>Postconditions</h4>" + list(u.postconditions) + "</div></div>" +
           '<details class="more"><summary>Source statements</summary>' + srcList(u.source_statements) + "</details></div>";
       }).join("") || '<p class="muted">None generated.</p>';
@@ -768,17 +774,17 @@
       '<div class="btn-row"><button type="button" class="btn btn-primary" data-action="freeze"' + (frozen ? " disabled" : "") + ">Freeze baseline</button>" +
       '<button type="button" class="btn btn-ghost" data-action="refresh-run">Refresh</button><span class="muted">Needs the product owner or business analyst role.</span></div></div>';
     h += '<h3 class="section-title">Blocking items (' + S.run.blockers.length + ")</h3>" + (S.run.blockers.length ? table(["Type", "Item", "Version", "Status"], S.run.blockers.map(function (x) {
-      return [esc(cap(x.item_type)), '<span class="id">' + esc(x.item_id) + "</span>", "v" + esc(x.version), statusBadge(x.status)];
+      return [esc(typeLabel(x.item_type)), '<span class="id">' + esc(itemName(x.item_type, x.item_id)) + "</span>", "v" + esc(x.version), statusBadge(x.status)];
     })) : '<p class="muted">Nothing is blocking the baseline.</p>');
     h += '<h3 class="section-title">All approval items</h3>' + xtable("items", ["Type", "Item", "Version", "Status", "Mandatory"], S.run.items.map(function (x) {
-      return { key: x.item_type + ":" + x.item_id, label: x.item_id, detail: kv([
+      return { key: x.item_type + ":" + x.item_id, label: itemLabel(x.item_type, x.item_id), detail: kv([
           ["History", esc(x.history.map(function (v) { return "v" + v.version + " " + v.status; }).join(", "))],
           ["Regenerations left", esc(x.regenerations_left)],
           ["Accepted by", x.item_type === "sdlc" && x.accepted_by ? esc(x.accepted_by.join(", ") || "nobody yet") : ""]]),
-        cells: [esc(cap(x.item_type)), '<span class="id">' + esc(x.item_id) + "</span>", "v" + esc(x.version), statusBadge(x.status), x.mandatory ? "Yes" : "No"] };
+        cells: [esc(typeLabel(x.item_type)), '<span class="id">' + esc(itemName(x.item_type, x.item_id)) + "</span>", "v" + esc(x.version), statusBadge(x.status), x.mandatory ? "Yes" : "No"] };
     }));
     h += '<h3 class="section-title">Decision history</h3>' + table(["When", "Role", "Action", "Item", "Version", "Comment"], (S.run.decisions || []).map(function (d) {
-      return [esc(d.created_at), esc(cap(d.role)), esc(cap(d.action)), esc(d.item_type + " " + d.item_id), esc(d.version), esc(d.action === "freeze" ? "(snapshot of item versions)" : d.comment || "")];
+      return [esc(d.created_at), esc(cap(d.role)), esc(cap(d.action)), esc(itemLabel(d.item_type, d.item_id)), esc(d.version), esc(d.action === "freeze" ? "(snapshot of item versions)" : d.comment || "")];
     }), "No decisions yet.");
     return h;
   }
@@ -981,7 +987,7 @@
   // ---------------------------------------------------------------- review dialog
   function openReview(type, id, act) {
     var it = item(type, id); if (!it) return;
-    var d = $("dialog"), c = it.content || {}, h = '<form method="dialog" id="reviewForm"><h3 id="dialogTitle">' + esc(act.charAt(0).toUpperCase() + act.slice(1)) + " " + esc(type) + " " + esc(id) +
+    var d = $("dialog"), c = it.content || {}, h = '<form method="dialog" id="reviewForm"><h3 id="dialogTitle">' + esc(act.charAt(0).toUpperCase() + act.slice(1)) + " " + esc(itemLabel(type, id)) +
       ' <span class="ver">v' + it.version + " &middot; " + esc(it.status) + "</span></h3>";
     if (type === "requirement") h += '<p class="small">' + esc(c.requirement) + "</p>";
     if (type === "compliance") h += '<p class="small">' + esc(c.required_control || "") + "</p>";
@@ -1020,7 +1026,7 @@
       $("reviewSubmit").disabled = true; $("reviewSubmit").textContent = "Sending...";
       api("POST", "/runs/" + encodeURIComponent(S.result.run_id) + "/approvals", body).then(function (res) {
         d.close();
-        addBanner("", "<strong>" + esc(type + " " + id) + "</strong> is now " + esc(res.status) + " (v" + esc(res.version) + ").", "review");
+        addBanner("", "<strong>" + esc(itemLabel(type, id)) + "</strong> is now " + esc(res.status) + " (v" + esc(res.version) + ").", "review");
         if (res.masking && res.masking.total) maskingBanner(res.masking);
         return refreshAll();
       }).catch(function (e) { d.close(); showError(e, act + " " + id); refreshAll(); });

@@ -189,3 +189,46 @@ def test_srs_can_be_built_from_the_sample(sample):
         r = client.post(f"/agents/srs?format={fmt}", json=body, headers={"X-Role": "business analyst"})
         assert r.status_code == 200 and ctype in r.headers["content-type"], r.text[:300]
         assert "FR-1" in r.text
+
+
+# --- label, step and count helpers, run in Node ------------------------------------------
+
+HELPERS = ("cap", "typeLabel", "itemLabel", "itemName", "stepText", "reviewCounts", "reviewText")
+
+
+def _helper_source() -> str:
+    lines = []
+    for name in HELPERS:
+        m = re.search(rf"^  function {name}\(.*$", APP_JS, re.M)
+        assert m, f"{name} must stay a one-line helper in app.js"
+        lines.append(m.group(0).strip())
+    return "\n".join(lines)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node.js not installed; helpers not run")
+def test_ui_label_step_and_count_helpers():
+    script = _helper_source() + """
+var cm = {requirements: [{needs_human_review: true, mappings: [1, 2]}, {needs_human_review: false, mappings: [1]},
+                         {needs_human_review: true, mappings: []}]};
+console.log(JSON.stringify({
+  sdlc: itemLabel("sdlc", "sdlc"), req: itemLabel("requirement", "FR-1"), comp: itemLabel("compliance", "FR-1/kyc_aml"),
+  type: typeLabel("sdlc"), name: itemName("sdlc", "sdlc"), nameReq: itemName("requirement", "FR-2"),
+  steps: ["1. Officer declines", "Step 2: Send", "3) Tell", "1.5 seconds later"].map(stepText),
+  counts: reviewCounts(cm), text: reviewText(reviewCounts(cm)), one: reviewText({reqs: 1, maps: 1})
+}));
+"""
+    out = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr
+    r = json.loads(out.stdout)
+    assert r["sdlc"] == "SDLC selection" and r["type"] == "SDLC" and r["name"] == "SDLC selection"
+    assert r["req"] == "Requirement FR-1" and r["comp"] == "Compliance FR-1/kyc_aml" and r["nameReq"] == "FR-2"
+    assert r["steps"] == ["Officer declines", "Send", "Tell", "1.5 seconds later"]
+    assert r["counts"] == {"reqs": 2, "maps": 2} and r["text"] == "2 requirements (2 mappings)"
+    assert r["one"] == "1 requirement (1 mapping)"
+
+
+def test_no_raw_type_and_id_labels_left():
+    # "sdlc sdlc" came from joining item_type and item_id directly
+    assert 'item_type + " " + ' not in APP_JS and 'esc(type + " " + id)' not in APP_JS
+    assert "cap(x.item_type)" not in APP_JS
+    assert "esc(stepText(s))" in APP_JS

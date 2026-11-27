@@ -15,6 +15,7 @@ Stored runs (app/runs.py, SQLite) are rendered with their current approval
 state, so downloads survive a restart.
 """
 import html
+import re
 from datetime import datetime, timezone
 
 from app.artefacts import all_requirements
@@ -29,11 +30,28 @@ NOTICE = ("Not a legal determination. Compliance content maps requirements to a 
 def H(level, text): return ("h", level, text)
 def P(text): return ("p", text)
 def UL(items): return ("ul", [i for i in items if i])
+def OL(items): return ("ol", [i for i in items if i])
 def TABLE(headers, rows): return ("table", headers, rows)
 def NOTE(text): return ("note", text)
 
 
 def _ids(ids): return ", ".join(ids) or "-"
+
+
+# A leading step number the model already wrote ("1. ", "2) ", "Step 3: "); "1.5 seconds" is left alone.
+_STEP_NUMBER = re.compile(r"^\s*(?:step\s+)?\d+[.):]\s+", re.IGNORECASE)
+
+
+def step_text(step) -> str:
+    """A use-case step without its own number, so a numbered list shows each number once."""
+    text = str(step).strip()
+    return _STEP_NUMBER.sub("", text, count=1).strip() or text
+
+
+def review_counts(mapping: dict) -> tuple[int, int]:
+    """(requirements flagged for review, compliance mappings of those requirements) - the matrix counts the second."""
+    flagged = [e for e in (mapping or {}).get("requirements", []) if e.get("needs_human_review")]
+    return len(flagged), sum(len(e.get("mappings", [])) for e in flagged)
 
 
 def _source(s: dict) -> str:
@@ -101,7 +119,8 @@ def build_blocks(result: dict, generated_at: str | None = None) -> list[tuple]:
         b += [H(3, f"{uc['id']} {uc['name']}"),
               P(f"Primary actor: {uc['primary_actor']}. Requirements: {_ids(uc['requirement_ids'])}."),
               P("Preconditions: " + ("; ".join(uc["preconditions"]) or "none")),
-              UL([f"{i}. {step}" for i, step in enumerate(uc["main_flow"], start=1)]),
+              P("Main flow:"),
+              OL([step_text(step) for step in uc["main_flow"]]),
               P("Alternative flows: " + ("; ".join(uc["alternative_flows"]) or "none")),
               P("Postconditions: " + ("; ".join(uc["postconditions"]) or "none")),
               P(f"Source statements: {_sources(uc)}")]
@@ -199,7 +218,9 @@ def build_blocks(result: dict, generated_at: str | None = None) -> list[tuple]:
     if summary.get("compliance"):
         approvals.append(["Regulatory interpretations (compliance mapping)", summary["compliance"], "Compliance officer"])
     elif mapping.get("review_count"):
-        approvals.append([f"Compliance interpretations flagged for review ({mapping['review_count']})", "pending",
+        n_req, n_map = review_counts(mapping)
+        approvals.append([f"Compliance mappings flagged for review: {n_req} requirement{'s' if n_req != 1 else ''} "
+                          f"({n_map} mapping{'s' if n_map != 1 else ''})", "pending",
                           "Compliance or legal officers"])
     if baseline:
         approvals.append(["Requirement baseline", baseline.get("status", "open"), "Product owner or business analyst"])
@@ -231,6 +252,8 @@ def render_markdown(blocks: list[tuple]) -> str:
             out.append(f"> **{block[1]}**")
         elif kind == "ul":
             out.append("\n".join(f"- {_md_cell(i)}" for i in block[1]) or "- (none)")
+        elif kind == "ol":
+            out.append("\n".join(f"{n}. {_md_cell(i)}" for n, i in enumerate(block[1], start=1)) or "(none)")
         elif kind == "table":
             headers, rows = block[1], block[2]
             lines = ["| " + " | ".join(_md_cell(h) for h in headers) + " |", "|" + "---|" * len(headers)]
@@ -266,6 +289,8 @@ def render_html(blocks: list[tuple]) -> str:
             body.append(f'<div class="note">{e(block[1])}</div>')
         elif kind == "ul":
             body.append("<ul>" + "".join(f"<li>{e(str(i))}</li>" for i in block[1]) + "</ul>")
+        elif kind == "ol":
+            body.append("<ol>" + "".join(f"<li>{e(str(i))}</li>" for i in block[1]) + "</ol>")
         elif kind == "table":
             if not block[2]:
                 body.append("<p>(none)</p>")

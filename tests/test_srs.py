@@ -83,3 +83,50 @@ def test_markdown_and_html_come_from_the_same_blocks():
     md_rows = render_markdown(blocks).count("\n| ") - sum(1 for b in blocks if b[0] == "table" and b[2])
     html_rows = render_html(blocks).count("<tr>") - sum(1 for b in blocks if b[0] == "table" and b[2])
     assert md_rows == html_rows
+
+
+# --- use-case steps are numbered once (the model often numbers them itself) ------------
+
+def _with_numbered_steps():
+    r = pipeline_result()
+    r["artefacts"]["use_cases"][0]["main_flow"] = ["1. Officer declines", "Step 2: System sends reason", "3) Applicant is told",
+                                                   "1.5 seconds later the case closes"]
+    return r
+
+
+def test_use_case_steps_render_once_numbered_in_markdown():
+    section = md(_with_numbered_steps()).split("## 6. Use cases")[1].split("## 7.")[0]
+    assert "1. Officer declines\n2. System sends reason\n3. Applicant is told\n4. 1.5 seconds later the case closes" in section
+    assert "- 1." not in section and "1. 1." not in section
+
+
+def test_use_case_steps_render_once_numbered_in_html():
+    page = render_html(build_blocks(_with_numbered_steps(), generated_at=WHEN))
+    assert ("<ol><li>Officer declines</li><li>System sends reason</li><li>Applicant is told</li>"
+            "<li>1.5 seconds later the case closes</li></ol>") in page
+
+
+def test_step_text_strips_only_a_leading_step_number():
+    from app.srs import step_text
+    assert step_text("1. Officer declines") == "Officer declines"
+    assert step_text("  Step 12:  Close the case ") == "Close the case"
+    assert step_text("2) Notify") == "Notify"
+    assert step_text("1.5 seconds later") == "1.5 seconds later"
+    assert step_text("3 approvers sign off") == "3 approvers sign off"
+    assert step_text("1.") == "1."                                     # nothing left: keep the text
+
+
+# --- review counts: requirements and their mappings, named separately ----------------------
+
+def test_review_counts_name_requirements_and_mappings():
+    from app.srs import review_counts
+    mapping = {"requirements": [
+        {"requirement_id": "FR-1", "needs_human_review": True, "mappings": [{"source": "a"}, {"source": "b"}]},
+        {"requirement_id": "FR-2", "needs_human_review": False, "mappings": [{"source": "a"}]},
+        {"requirement_id": "FR-3", "needs_human_review": True, "mappings": []}]}
+    assert review_counts(mapping) == (2, 2)
+    assert review_counts({}) == (0, 0)
+    r = pipeline_result()
+    r["compliance_mapping"] = dict(mapping, review_count=2)
+    r.pop("approval_summary", None)
+    assert "| Compliance mappings flagged for review: 2 requirements (2 mappings) | pending |" in md(r)
