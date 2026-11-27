@@ -118,6 +118,40 @@ def test_require_role_rejects_requests_without_a_header(run_id, monkeypatch):
     assert client.get("/health").status_code == 200   # health and the UI page do not need a role
 
 
+def test_require_role_on_every_ui_request_with_a_role_works(run_id, monkeypatch):
+    """What the UI does, with REQUIRE_ROLE=1: each of these requests carries X-Role (see test_ui)."""
+    import app.agents.artefact_agent as aa
+    import app.agents.risk_agent as ra
+    import app.agents.workflow_agent as wa
+    import tests.test_pipeline_phase1 as p1
+    for mod in (p1.req_mod, p1.comp_mod, p1.quality_mod, p1.sdlc_mod, ra, wa, aa):
+        monkeypatch.setattr(mod, "generate_text", p1.router())
+    monkeypatch.setattr(p1.comp_mod, "retrieve_many", lambda qs, top_k=3: [[
+        {"id": "kyc_aml-0", "source": "kyc_aml", "text": "KYC", "distance": 0.40}] for _ in qs])
+    monkeypatch.setenv("REQUIRE_ROLE", "1")
+
+    assert client.get("/agents/interview/templates").status_code == 200   # no role needed (UI sends one anyway)
+    r = client.post("/agents/pipeline", headers=H(BA), json={"scenario": p1.SCENARIO})
+    assert r.status_code == 200, r.text
+    new_run = r.json()["run_id"]
+    for path in (f"/runs/{new_run}", f"/runs/{new_run}/result", f"/runs/{run_id}"):
+        assert client.get(path, headers=H(BA)).status_code == 200, path
+    assert act(run_id, "requirement", "FR-1", "accept", PO).status_code == 200
+    the_rest = [("requirement", i, PO) for i in ("FR-2", "NFR-1")] + [("requirement", "NFR-2", SEC)] + \
+        [("compliance", i, COMP) for i in ("FR-1/kyc_aml", "FR-2/fair_lending")]
+    for item_type, item_id, role in the_rest:
+        assert act(run_id, item_type, item_id, "accept", role).status_code == 200
+    assert client.post(f"/runs/{run_id}/baseline/freeze", headers=H(PO)).status_code == 200
+    assert client.get(f"/audit?run_id={run_id}&limit=200", headers=H(AUD)).status_code == 200
+    for fmt, kind in (("markdown", "text/markdown"), ("html", "text/html")):
+        r = client.get(f"/agents/srs/{run_id}?format={fmt}", headers=H(BA))
+        assert r.status_code == 200 and r.headers["content-type"].startswith(kind)
+        sample_mode = client.post(f"/agents/srs?format={fmt}", headers=H(BA), json=pipeline_result())
+        assert sample_mode.status_code == 200
+    # A plain link to the SRS (no header) is refused: the UI therefore fetches it with the header instead.
+    assert client.get(f"/agents/srs/{run_id}?format=html").status_code == 400
+
+
 def test_without_require_role_missing_headers_still_work(run_id, monkeypatch):
     monkeypatch.delenv("REQUIRE_ROLE", raising=False)
     assert client.get(f"/runs/{run_id}").status_code == 200

@@ -7,6 +7,7 @@ Course project (CS305 Software Engineering, NITK, solo, by Darshan). A FastAPI a
 - Run: `python -m uvicorn app.main:app --reload --port 8001` (or `run.bat`), UI at http://127.0.0.1:8001/
 - Build knowledge base (needs `.env` key + internet): `python -m app.rag.ingest`
 - Tests (offline, mocked): `python -m pytest -q`
+- Pre-demo checks (no model calls by default): `python -m scripts.preflight [--run <id>] [--ping-model] [--ping-embed]`
 - Windows + PowerShell; use the project's `venv`.
 
 ## Rules for changes

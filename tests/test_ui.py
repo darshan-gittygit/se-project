@@ -107,6 +107,20 @@ def test_every_api_path_in_the_js_exists():
     assert '"X-Role": S.role' in APP_JS
 
 
+def test_every_request_sends_the_role_so_require_role_works():
+    """With REQUIRE_ROLE=1 a request without X-Role gets 400, and a browser link navigation sends no headers.
+    So every fetch must carry the header, and the SRS buttons must fetch the file, not link to the API."""
+    calls = re.findall(r"\bfetch\(([^;]*)", APP_JS)
+    assert len(calls) == 3   # api(), fetchText() and the interview templates; a new fetch must send X-Role too
+    for call in calls:
+        assert "opts" in call or '"X-Role": S.role' in call, call
+    assert APP_JS.count('var opts = { method: method, headers: { "X-Role": S.role } };') == 2
+    for api_path in ("/agents/", "/runs/", "/audit"):   # no <a href>, window.open or location pointing at the API
+        assert not re.search(r"(href\s*=|window\.open\(|location(\.href)?\s*=)\s*[\"']" + re.escape(api_path), APP_JS), api_path
+    assert 'fetchText("GET", "/agents/srs/"' in APP_JS and "URL.createObjectURL(blob)" in APP_JS
+    assert '<option value="">' not in (STATIC / "index.html").read_text(encoding="utf-8")   # the role is never empty
+
+
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js not installed; JS syntax not checked")
 @pytest.mark.parametrize("name", ["app.js", "charts.js"])
 def test_js_parses(name):

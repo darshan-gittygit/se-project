@@ -91,8 +91,10 @@ label.check { font-weight: 500; display: inline-flex; gap: 8px; align-items: cen
 .stage-icon.dot { background: transparent; }
 .stage-icon.dot::after { content: ""; width: 9px; height: 9px; border-radius: 50%; background: #4a4a52; }
 .stage-icon.dot.attention::after { background: var(--warn); }
-.stage-icon.running { border: 3px solid var(--line); border-top-color: var(--accent); animation: spin .9s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.stage-icon.running { border: 3px solid var(--line); border-top-color: var(--accent); }
+/* One spin for both spinners (sidebar stage and "Run analysis"): a full turn from 0deg, linear, about its centre. */
+.stage-icon.running, .running-box .spinner { animation: spin .9s linear infinite; transform-origin: 50% 50%; will-change: transform; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .run-info { font-size: .9375rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; display: flex; flex-direction: column; gap: 4px; word-break: break-word; }
 
 .main { padding: 32px 40px 64px; min-width: 0; }
@@ -157,7 +159,7 @@ label.check { font-weight: 500; display: inline-flex; gap: 8px; align-items: cen
 .doc-list { list-style: none; padding: 0; margin: 10px 0 0; }
 .doc-list li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 6px; }
 .running-box { display: flex; align-items: center; gap: 16px; padding: 16px 18px; border: 1px solid var(--accent); border-radius: var(--radius); background: var(--panel); margin-top: 16px; }
-.running-box .spinner { width: 24px; height: 24px; flex: none; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: spin .9s linear infinite; }
+.running-box .spinner { width: 24px; height: 24px; flex: none; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); }
 .elapsed { font-family: var(--font-head); font-weight: 700; font-size: 1.3rem; }
 details.more > summary { cursor: pointer; font-family: var(--font-head); font-weight: 600; color: var(--accent-2); padding: 4px 0; }
 details.more[open] > summary { margin-bottom: 12px; }

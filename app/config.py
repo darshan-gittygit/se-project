@@ -34,7 +34,7 @@ def retention_days() -> int | None:
 
 
 def require_role() -> bool:
-    """REQUIRE_ROLE=1/true/yes/on: API requests without an X-Role header get 400. Off by default (the UI sends none yet)."""
+    """REQUIRE_ROLE=1/true/yes/on: API requests without an X-Role header get 400. Off by default; the UI sends the role picked in its top bar on every request."""
     return os.environ.get("REQUIRE_ROLE", "").strip().lower() in ("1", "true", "yes", "on")
 
 load_dotenv(PROJECT_ROOT / ".env")  # reads .env from the project root if present

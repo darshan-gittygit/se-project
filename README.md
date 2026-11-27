@@ -59,6 +59,8 @@ python -m uvicorn app.main:app --reload --port 8001
 
 or double-click `run.bat`. Then open <http://127.0.0.1:8001/>. API docs are at `/docs`.
 
+Before a demo, `python -m scripts.preflight` checks `.env`, the knowledge base (31 chunks), `data/app.db` and its audit chain, the static files and port 8001, with one PASS/FAIL line each and no model calls. Add `--run <run_id>` to check a stored run, and `--ping-model` / `--ping-embed` for one live call each.
+
 ## Using the web UI
 
 Plain HTML, CSS and JavaScript in `app/static/` (no framework, no build step; charts are inline SVG drawn by `charts.js`).
@@ -141,7 +143,7 @@ knowledge_base/              curated compliance source documents (*.txt) + sourc
 chroma_db/                   generated vector store (rebuild with the ingest command)
 data/app.db                  local database (created on startup, gitignored)
 tests/                       offline test suite
-scripts/                     threshold tuning (live), win-share and sensitivity analysis (offline), make_sample_run.py,
+scripts/                     threshold tuning (live), win-share and sensitivity analysis (offline), make_sample_run.py, preflight.py,
                              run_eval.py, evaluate.py, eval_human.py, eval_report.py (evaluation harness)
 eval/                        case studies (cases/), results/, manual_baseline/, satisfaction form and answers
 docs/ARCHITECTURE.md         design notes, diagrams, scoring tables
