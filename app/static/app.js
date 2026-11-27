@@ -48,7 +48,8 @@
     result: null, run: null, sample: false,
     running: false, startedAt: 0, lastElapsed: null, timer: null,
     audit: null, auditFilters: { run_id: "", role: "", action: "", limit: 200 },
-    banners: [], busy: false
+    banners: [], busy: false,
+    open: {}            // expanded table rows, by table and row key
   };
   if (ROLES.indexOf(S.role) < 0) S.role = "business analyst";
 
@@ -59,6 +60,7 @@
     });
   }
   function $(id) { return document.getElementById(id); }
+  function cap(s) { s = String(s == null ? "" : s).replace(/_/g, " "); return s.charAt(0).toUpperCase() + s.slice(1); }
   function list(arr, empty) {
     if (!arr || !arr.length) return empty == null ? '<span class="muted">-</span>' : empty;
     return "<ul>" + arr.map(function (x) { return "<li>" + esc(typeof x === "string" ? x : x.text) + "</li>"; }).join("") + "</ul>";
@@ -67,15 +69,14 @@
     if (!arr || !arr.length) return '<span class="muted">-</span>';
     return arr.map(function (c) { return '<span class="chip ' + (cls || "") + '">' + esc(c) + "</span>"; }).join("");
   }
-  function level(v) {
+  // Two badge colours only: violet for normal values, amber for values that need attention.
+  function badge(text, warn) { return '<span class="badge' + (warn ? " warn" : "") + '">' + esc(text) + "</span>"; }
+  function level(v, warnOn) {   // warnOn: the value that needs attention ("High" for risk, "Low" for confidence)
     if (!v) return '<span class="muted">-</span>';
-    return '<span class="badge ' + esc(String(v).toLowerCase()) + '">' + esc(v) + "</span>";
+    return badge(v, v === (warnOn || "High"));
   }
-  function statusBadge(s) {
-    var cls = { approved: "ok", satisfied: "ok", rejected: "bad", gap: "bad", modified: "warn", proposed: "", superseded: "",
-                frozen: "ok", open: "warn", pending: "warn", not_applicable: "" }[s];
-    return '<span class="badge ' + (cls || "") + '">' + esc(String(s || "-").replace(/_/g, " ")) + "</span>";
-  }
+  var WARN_STATUSES = ["rejected", "gap", "modified", "pending", "open", "not_assessed", "no status"];
+  function statusBadge(s) { return badge(cap(s || "-"), WARN_STATUSES.indexOf(s) >= 0); }
   function fmtTime(ms) {
     var s = Math.floor(ms / 1000);
     return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
@@ -94,6 +95,44 @@
     return sec ? ["security officer"] : ["business analyst", "product owner"];
   }
   function live() { return S.result && !S.sample && S.run; }
+  function intro(title, sentence, aside) {
+    return '<div class="tab-intro"><div><h2>' + esc(title) + "</h2><p>" + esc(sentence) + "</p></div>" + (aside || "") + "</div>";
+  }
+  function quote(text, src) {
+    return '<div class="quote">&ldquo;' + esc(text) + "&rdquo;" + (src ? '<span class="src">' + esc(src) + "</span>" : "") + "</div>";
+  }
+  // Label/value pairs for an expanded row; empty values are left out. Values are HTML (escape before passing).
+  function kv(pairs) {
+    var rows = pairs.filter(function (p) { return p[1] != null && p[1] !== ""; });
+    return '<dl class="kv">' + rows.map(function (p) { return "<dt>" + esc(p[0]) + "</dt><dd>" + p[1] + "</dd>"; }).join("") + "</dl>";
+  }
+  // Table with key columns only; a row with `detail` gets a toggle that opens a full-width row under it.
+  function xtable(tid, headers, rows, empty) {
+    if (!rows.length) return '<p class="muted">' + esc(empty || "Nothing to show.") + "</p>";
+    return '<div class="table-wrap"><table class="xt"><thead><tr><th class="xcol"><span class="visually-hidden">Details</span></th>' +
+      headers.map(function (x) { return "<th>" + esc(x) + "</th>"; }).join("") + "</tr></thead><tbody>" +
+      rows.map(function (r) {
+        var k = tid + ":" + r.key, open = !!S.open[k], did = "d-" + k.replace(/[^A-Za-z0-9_-]/g, "_");
+        return '<tr class="xrow' + (open ? " is-open" : "") + '"><td class="xcol">' + (r.detail ?
+          '<button type="button" class="xbtn" data-action="toggle-row" data-key="' + esc(k) + '" data-target="' + did + '" aria-expanded="' + open +
+          '" aria-controls="' + did + '" title="Show or hide details"><span aria-hidden="true">&#9656;</span><span class="visually-hidden">Details for ' +
+          esc(r.label || r.key) + "</span></button>" : "") + "</td>" +
+          r.cells.map(function (c) { return "<td>" + c + "</td>"; }).join("") + "</tr>" +
+          (r.detail ? '<tr class="xdetail" id="' + did + '"' + (open ? "" : " hidden") + '><td></td><td colspan="' + headers.length + '">' + r.detail + "</td></tr>" : "");
+      }).join("") + "</tbody></table></div>";
+  }
+  function table(headers, rows, empty) {
+    if (!rows.length) return '<p class="muted">' + esc(empty || "None generated.") + "</p>";
+    return '<div class="table-wrap"><table><thead><tr>' + headers.map(function (x) { return "<th>" + esc(x) + "</th>"; }).join("") + "</tr></thead><tbody>" +
+      rows.map(function (r) { return "<tr>" + r.map(function (c) { return "<td>" + c + "</td>"; }).join("") + "</tr>"; }).join("") + "</tbody></table></div>";
+  }
+  function ids(a) { return esc((a || []).join(", ") || "-"); }
+  function reviewButtons(type, id, acts, disabled, title) {
+    return '<div class="act-row">' + acts.map(function (a) {
+      return '<button type="button" class="btn btn-sm" data-action="review" data-type="' + type + '" data-id="' + esc(id) + '" data-act="' + a + '"' +
+        (disabled ? " disabled" : "") + (title ? ' title="' + esc(title) + '"' : "") + ">" + cap(a) + "</button>";
+    }).join("") + "</div>";
+  }
 
   // ---------------------------------------------------------------- API
   function ApiError(status, message, data) { this.status = status; this.message = message; this.data = data; }
@@ -159,60 +198,68 @@
     renderPanel();
   }
 
+  // Tabs that only make sense once there is a result.
+  var NEEDS_RESULT = ["overview", "requirements", "compliance", "sdlc", "artefacts", "approvals"];
+  function enabled(id) { return NEEDS_RESULT.indexOf(id) < 0 || !!S.result; }
+
   function stageInfo(id) {
     var r = S.result;
     if (id === "scenario") {
-      if (S.running) return { st: "running", sum: "Running... " + fmtTime(Date.now() - S.startedAt) };
+      if (S.running) return { st: "running", sum: "Running, " + fmtTime(Date.now() - S.startedAt) };
       if (!r) return { st: "", sum: S.input.scenario ? S.input.scenario.length + " characters entered" : "Describe the project" };
-      return { st: "done", sum: (r.scenario || "").length + " chars, " + (r.answers || []).length + " answers, " + (r.documents || []).length + " docs" };
+      var na = (r.answers || []).length, nd = (r.documents || []).length;
+      return { st: "done", sum: na + " answer" + (na === 1 ? "" : "s") + ", " + nd + " document" + (nd === 1 ? "" : "s") };
     }
-    if (!r) return { st: S.running ? "running" : "", sum: S.running ? "Waiting for the pipeline" : "Not run yet" };
+    if (!r) return { st: "", sum: S.running ? "Waiting for the pipeline" : "Run an analysis first" };
     if (id === "requirements") {
       var q = (r.quality && r.quality.flags || []).length;
-      return { st: q ? "attention" : "done", sum: (r.requirements.functional_requirements || []).length + " FR, " +
-        (r.requirements.non_functional_requirements || []).length + " NFR, " + q + " quality flag" + (q === 1 ? "" : "s") };
+      return { st: q ? "attention" : "done", sum: allReqs().length + " requirements, " + q + " flag" + (q === 1 ? "" : "s") };
     }
     if (id === "compliance") {
       var rc = r.compliance_mapping ? r.compliance_mapping.review_count : 0;
       var nr = r.risk_register ? r.risk_register.risks.length : 0;
-      return { st: rc ? "attention" : "done", sum: "Risk " + (r.compliance ? r.compliance.risk_level : "-") + ", " + rc + " to review, " + nr + " risks" };
+      return { st: rc ? "attention" : "done", sum: rc + " to review, " + nr + " risks" };
     }
     if (id === "sdlc") {
       var s = r.sdlc_recommendation;
       if (!s) return { st: "", sum: "-" };
       var top = s.scored_models && s.scored_models[0];
-      return { st: s.is_close_call ? "attention" : "done", sum: s.recommended_model + (top ? " " + top.percent : "") + (s.is_close_call ? " (close call)" : "") };
+      return { st: s.is_close_call ? "attention" : "done", sum: s.recommended_model + (top ? " " + top.percent : "") + (s.is_close_call ? ", close call" : "") };
     }
     if (id === "artefacts") {
       var a = r.artefacts || {};
-      return { st: "done", sum: (a.user_stories || []).length + " stories, " + (a.use_cases || []).length + " use cases, " + (a.open_issues || []).length + " open issues" };
+      return { st: "done", sum: (a.user_stories || []).length + " stories, " + (a.use_cases || []).length + " use cases" };
     }
     if (id === "approvals") {
-      if (S.sample) return { st: "", sum: "Recorded sample: no stored run" };
+      if (S.sample) return { st: "", sum: "Not stored (sample)" };
       if (!S.run) return { st: "", sum: "Run summary not loaded" };
       var b = S.run.blockers.length;
-      return { st: S.run.baseline.status === "frozen" ? "done" : "attention",
-               sum: "Baseline " + S.run.baseline.status + (b ? ", " + b + " blocking" : "") };
+      return { st: S.run.baseline.status === "frozen" ? "done" : "attention", sum: cap(S.run.baseline.status) + (b ? ", " + b + " blocking" : "") };
     }
     return { st: "", sum: "" };
+  }
+  function stageIcon(st) {
+    if (st === "done") return '<span class="stage-icon done" aria-hidden="true">&#10003;</span>';
+    if (st === "running") return '<span class="stage-icon running" aria-hidden="true"></span>';
+    return '<span class="stage-icon dot' + (st === "attention" ? " attention" : "") + '" aria-hidden="true"></span>';
   }
 
   function renderSidebar() {
     $("stageList").innerHTML = STAGES.map(function (st) {
-      var info = stageInfo(st.id);
-      return '<li><button type="button" class="stage-btn" data-action="tab" data-tab="' + st.id + '"' +
-        (S.tab === st.id ? ' aria-current="true"' : "") + '><span class="stage-dot ' + info.st + '" aria-hidden="true"></span>' +
-        '<span class="stage-name">' + esc(st.name) + '</span><span class="stage-sum">' + esc(info.sum) +
-        (info.st === "attention" ? '<span class="visually-hidden"> (needs attention)</span>' : "") + "</span></button></li>";
+      var info = stageInfo(st.id), on = enabled(st.id);
+      var state = { done: "done", running: "running", attention: "needs attention" }[info.st] || (on ? "not started" : "not available yet");
+      return '<li><button type="button" class="stage-btn" data-action="tab" data-tab="' + st.id + '"' + (on ? "" : " disabled") +
+        (S.tab === st.id ? ' aria-current="true"' : "") + ">" + stageIcon(info.st) +
+        '<span class="stage-text"><span class="stage-name">' + esc(st.name) + '</span><span class="stage-sum">' + esc(info.sum) +
+        '</span></span><span class="visually-hidden"> (' + state + ")</span></button></li>";
     }).join("");
     var r = S.result, html = "";
     if (r) {
       var v = r.versions || r.meta || {};
-      html += (S.sample ? '<div><span class="badge warn">Recorded sample, not a live run</span></div>' : "") +
+      html += (S.sample ? '<div><span class="badge warn">Recorded sample</span></div>' : "") +
         "<div>Run <code>" + esc(r.run_id || "-") + "</code></div>" +
-        "<div>App " + esc(v.app_version || "-") + " &middot; KB " + esc(v.kb_version || "-") + "</div>" +
-        "<div>Embeddings " + esc(v.embedding_model || "-") + "</div>" +
-        "<div>Models " + esc((v.models || []).join(", ") || (S.sample ? "none (mocked)" : "-")) + "</div>" +
+        "<div>Model " + esc((v.models || []).join(", ") || "-") + "</div>" +
+        "<div>App " + esc(v.app_version || "-") + ", KB " + esc(v.kb_version || "-") + "</div>" +
         (S.lastElapsed != null && !S.sample ? "<div>Took " + fmtTime(S.lastElapsed) + "</div>" : "");
     } else {
       html = "<div>No analysis yet. Enter a scenario, or load the recorded sample.</div>";
@@ -221,16 +268,18 @@
   }
 
   function tabsFor() {
-    var t = STAGES.slice();
+    var t = [{ id: "overview", name: "Overview" }].concat(STAGES);
     if (AUDIT_ROLES.indexOf(S.role) >= 0) t.push({ id: "audit", name: "Audit log" });
     return t;
   }
   function renderTabs() {
     var t = tabsFor();
-    if (!t.some(function (x) { return x.id === S.tab; })) S.tab = "scenario";
+    if (!t.some(function (x) { return x.id === S.tab && enabled(x.id); })) S.tab = "scenario";
     $("tabs").innerHTML = t.map(function (x) {
+      var on = enabled(x.id);
       return '<button type="button" class="tab" role="tab" id="tab-' + x.id + '" aria-controls="panel" aria-selected="' + (S.tab === x.id) +
-        '" tabindex="' + (S.tab === x.id ? 0 : -1) + '" data-action="tab" data-tab="' + x.id + '">' + esc(x.name) + "</button>";
+        '" tabindex="' + (S.tab === x.id ? 0 : -1) + '" data-action="tab" data-tab="' + x.id + '"' +
+        (on ? "" : ' disabled title="Run an analysis first"') + ">" + esc(x.name) + "</button>";
     }).join("");
     $("panel").setAttribute("aria-labelledby", "tab-" + S.tab);
   }
@@ -242,7 +291,7 @@
   }
 
   function renderPanel() {
-    var fn = { scenario: viewScenario, requirements: viewRequirements, compliance: viewCompliance, sdlc: viewSdlc,
+    var fn = { overview: viewOverview, scenario: viewScenario, requirements: viewRequirements, compliance: viewCompliance, sdlc: viewSdlc,
                artefacts: viewArtefacts, approvals: viewApprovals, audit: viewAudit }[S.tab];
     try {
       $("panel").innerHTML = fn();
@@ -253,9 +302,56 @@
     }
   }
   function needResult(what) {
-    return '<div class="card empty"><p>No ' + esc(what) + ' yet.</p><p class="small">Run an analysis from the Scenario tab, or load the recorded sample.</p>' +
+    return '<div class="card empty"><p>No ' + esc(what) + ' yet. Run an analysis first.</p>' +
       '<div class="btn-row" style="justify-content:center"><button type="button" class="btn" data-action="tab" data-tab="scenario">Go to Scenario</button>' +
       '<button type="button" class="btn btn-ghost" data-action="load-sample">Load recorded sample</button></div></div>';
+  }
+
+  // ---------------------------------------------------------------- view: overview
+  var GENERATED = ["user_stories", "use_cases", "process_workflows", "data_requirements", "interface_requirements"];
+  function closeCallNote(s) {
+    var m = s.scored_models || [];
+    if (!s.is_close_call || !m[1]) return "";
+    return '<p class="close-note"><strong>Close call:</strong> ' + esc(m[0].model + " " + m[0].percent + " and " + m[1].model + " " + m[1].percent) +
+      " are within 5 points. Both are reasonable; the four approvers decide.</p>";
+  }
+  function overrideNote(s) {
+    var it = item("sdlc", "sdlc");
+    var o = s.human_override || (it && it.content && it.content.human_override ? it.content.recommended_model : null);
+    return o ? '<p class="close-note">Reviewers changed the selection to <strong>' + esc(o) + "</strong> (human override).</p>" : "";
+  }
+  function heroCard(s) {
+    var models = s.scored_models || [];
+    var top = models.filter(function (m) { return m.model === s.recommended_model; })[0] || models[0] || {};
+    return '<div class="card hero-card"><div class="hero"><div><div class="hero-label">Recommended SDLC model</div><div class="hero-model">' + esc(s.recommended_model || "-") +
+      '</div><p class="muted">Chosen by deterministic scoring against fixed model profiles; the LLM only rated the traits.</p></div>' +
+      '<div class="hero-right"><div class="hero-pct">' + esc(top.percent || "") + '</div><div class="stat-label">Fit score</div></div></div>' +
+      closeCallNote(s) + overrideNote(s) + "</div>";
+  }
+  function viewOverview() {
+    if (!S.result) return needResult("analysis");
+    var r = S.result, s = r.sdlc_recommendation || {}, a = r.artefacts || {};
+    var high = ((r.risk_register || {}).risks || []).filter(function (x) { return x.level === "High"; }).length;
+    var review = (r.compliance_mapping || {}).review_count || 0;
+    var arts = GENERATED.reduce(function (n, k) { return n + (a[k] || []).length; }, 0);
+    function tile(n, label, sub, tab) {
+      return '<button type="button" class="tile" data-action="tab" data-tab="' + tab + '"><span class="stat">' + n + '</span><span class="tile-label">' + esc(label) +
+        '</span><span class="tile-sub">' + esc(sub) + "</span></button>";
+    }
+    var baseline = S.sample ? "Not stored: this is the recorded sample, so nothing can be approved or frozen."
+      : S.run ? cap(S.run.baseline.status) + (S.run.blockers.length ? ", with " + S.run.blockers.length + " mandatory item" + (S.run.blockers.length === 1 ? "" : "s") + " still to approve." : ".")
+      : "The run summary could not be loaded.";
+    return intro("Overview", "The result at a glance. Each number opens the tab with the details behind it.") +
+      heroCard(s) +
+      '<div class="tiles">' + tile(allReqs().length, "Requirements", "functional and non-functional", "requirements") +
+      tile(high, "High risks", "in the risk register", "compliance") +
+      tile(review, "Need review", "compliance mappings flagged for a person", "compliance") +
+      tile(arts, "Artefacts", "stories, use cases, workflows, data, interfaces", "artefacts") + "</div>" +
+      '<div class="card"><div class="card-head"><h3>Requirement baseline</h3>' + (S.sample ? badge("Sample", true) : S.run ? statusBadge(S.run.baseline.status) : "") + "</div>" +
+      "<p>" + esc(baseline) + "</p>" +
+      '<div class="btn-row"><button type="button" class="btn btn-primary" data-action="srs-md">Download SRS</button>' +
+      '<button type="button" class="btn" data-action="srs-html">Open SRS</button>' +
+      '<button type="button" class="btn btn-ghost" data-action="new-analysis">New analysis</button></div></div>';
   }
 
   // ---------------------------------------------------------------- view: scenario
@@ -266,59 +362,60 @@
   }
   function viewScenario() {
     var dis = S.running ? " disabled" : "";
-    var h = '<div class="card"><div class="card-head"><h2>Project scenario</h2><span class="hint" id="scenarioCount">' +
-      S.input.scenario.length + " / " + MAX_SCENARIO + ' characters</span></div>' +
-      '<div class="field"><label for="scenarioText">Describe the system, its users and its constraints</label>' +
+    var h = intro("Scenario", "Describe the project, optionally add interview answers and documents, then run the analysis.",
+      S.result ? "" : '<p class="tabs-note">Run an analysis first to open the other tabs.</p>');
+    h += '<div class="card"><div class="card-head"><h3><label for="scenarioText">Project description</label></h3><span class="hint" id="scenarioCount">' +
+      S.input.scenario.length + " / " + MAX_SCENARIO + " characters</span></div>" +
       '<textarea id="scenarioText" rows="7" maxlength="' + MAX_SCENARIO + '" placeholder="Example: A digital loan origination system for a mid-sized bank..."' + dis + ">" +
-      esc(S.input.scenario) + '</textarea><div class="hint">Emails, phone numbers, card and ID numbers are replaced with placeholders on the server before any model call.</div></div></div>';
+      esc(S.input.scenario) + '</textarea><p class="hint">Emails, phone numbers, card and ID numbers are replaced with placeholders on the server before any model call.</p></div>';
 
     // interview
     h += '<div class="card"><div class="card-head"><h3>Stakeholder interview (optional)</h3><div class="btn-row">' +
       '<button type="button" class="btn btn-sm" data-action="add-answer"' + dis + ">Add an answer</button>" +
       '<button type="button" class="btn btn-sm" data-action="follow-ups"' + (S.running || S.interviewBusy ? " disabled" : "") + ">" +
       (S.interviewBusy ? "Asking..." : "Suggest follow-up questions") + "</button></div></div>" +
-      '<p class="hint">Answers can be quoted by requirements. "Suggest follow-up questions" makes one model call (<code>/agents/interview</code>).</p>';
+      '<p class="hint">Requirements can quote these answers. Suggesting follow-up questions makes one model call.</p>';
     if (S.input.answers.length) {
       h += S.input.answers.map(function (a, i) {
         return '<div class="answer-row"><select aria-label="Stakeholder role for answer ' + (i + 1) + '" data-answer="' + i + '" data-field="role"' + dis + ">" +
-          roleOptions(a.role) + '</select><div><input type="text" style="width:100%;margin-bottom:6px" aria-label="Question ' + (i + 1) +
+          roleOptions(a.role) + '</select><div><input type="text" class="full" aria-label="Question ' + (i + 1) +
           '" data-answer="' + i + '" data-field="question" value="' + esc(a.question) + '"' + dis + '><textarea aria-label="Answer ' + (i + 1) +
           '" data-answer="' + i + '" data-field="answer" placeholder="Answer"' + dis + ">" + esc(a.answer) + "</textarea>" +
-          (a.question_id ? '<span class="hint">Template ' + esc(a.question_id) + (a.topic ? " &middot; " + esc(a.topic) : "") + "</span>" : "") +
+          (a.question_id ? '<span class="hint">Template ' + esc(a.question_id) + (a.topic ? ", " + esc(a.topic) : "") + "</span>" : "") +
           '</div><button type="button" class="btn btn-sm btn-ghost" data-action="remove-answer" data-i="' + i + '"' + dis + ' aria-label="Remove answer ' + (i + 1) + '">Remove</button></div>';
       }).join("");
     } else {
-      h += '<p class="muted small">No answers yet.</p>';
+      h += '<p class="muted">No answers yet.</p>';
     }
     if (S.followUps) {
       h += "<h4>Suggested follow-ups</h4>";
       if (S.followUps.uncovered_topics && S.followUps.uncovered_topics.length) {
-        h += '<p class="small muted">Topics not yet covered: ' + esc(S.followUps.uncovered_topics.join(", ")) + "</p>";
+        h += '<p class="muted">Topics not yet covered: ' + esc(S.followUps.uncovered_topics.join(", ")) + "</p>";
       }
       h += (S.followUps.questions || []).map(function (q, i) {
-        return '<div class="q-item"><div class="q-meta">' + esc(q.role) + " &middot; " + esc(q.topic) + (q.template_id ? " &middot; template " + esc(q.template_id) : "") +
+        return '<div class="q-item"><div class="q-meta">' + esc(q.role) + ", " + esc(q.topic) + (q.template_id ? ", template " + esc(q.template_id) : "") +
           "</div><div>" + esc(q.question) + '</div><div class="hint">' + esc(q.reason) + '</div><button type="button" class="btn btn-sm" data-action="use-followup" data-i="' + i + '"' + dis + ">Answer this</button></div>";
-      }).join("") || '<p class="muted small">No follow-up questions returned.</p>';
+      }).join("") || '<p class="muted">No follow-up questions returned.</p>';
     }
     if (S.templates) {
       var byRole = {};
       S.templates.templates.forEach(function (t) { (byRole[t.role] = byRole[t.role] || []).push(t); });
-      h += '<details><summary class="small">Question templates by stakeholder (' + S.templates.templates.length + ")</summary>" +
+      h += '<details class="more"><summary>Question templates by stakeholder (' + S.templates.templates.length + ")</summary>" +
         Object.keys(byRole).map(function (role) {
-          return "<h4 style=\"margin-top:12px\">" + esc(role) + "</h4>" + byRole[role].map(function (t) {
-            return '<div class="q-item"><div class="q-meta">' + esc(t.id) + " &middot; " + esc(t.topic) + "</div><div>" + esc(t.question) +
+          return "<h4>" + esc(role) + "</h4>" + byRole[role].map(function (t) {
+            return '<div class="q-item"><div class="q-meta">' + esc(t.id) + ", " + esc(t.topic) + "</div><div>" + esc(t.question) +
               '</div><button type="button" class="btn btn-sm" data-action="use-template" data-id="' + esc(t.id) + '"' + dis + ">Answer this</button></div>";
           }).join("");
         }).join("") + "</details>";
     } else {
-      h += '<p class="muted small">Question templates are loading (or could not be loaded).</p>';
+      h += '<p class="muted">Question templates are loading (or could not be loaded).</p>';
     }
     h += "</div>";
 
     // documents
-    h += '<div class="card"><div class="card-head"><h3>Documents (optional)</h3><span class="hint">.txt, .md or .csv; up to ' + MAX_DOCS +
+    h += '<div class="card"><div class="card-head"><h3>Documents (optional)</h3><span class="hint">.txt, .md or .csv, up to ' + MAX_DOCS +
       " files of " + MAX_DOC_CHARS.toLocaleString() + ' characters</span></div><input type="file" id="docInput" accept=".txt,.md,.csv,text/plain,text/markdown,text/csv" multiple aria-label="Attach documents"' + dis + ">" +
-      '<p class="hint">Files are read in your browser and sent as JSON text; requirements can quote them by file name.</p>';
+      '<p class="hint">Files are read in your browser and sent as text; requirements can quote them by file name.</p>';
     if (S.input.documents.length) {
       h += '<ul class="doc-list">' + S.input.documents.map(function (d, i) {
         return "<li><span>" + esc(d.filename) + ' <span class="muted">(' + d.text.length.toLocaleString() + ' characters)</span></span><button type="button" class="btn btn-sm btn-ghost" data-action="remove-doc" data-i="' +
@@ -329,21 +426,19 @@
 
     // run
     h += '<div class="card"><div class="btn-row"><button type="button" class="btn btn-primary" data-action="run"' + dis + '>Run full analysis</button>' +
-      '<label class="small" style="font-weight:500"><input type="checkbox" id="artefactsToggle"' + (S.input.artefacts ? " checked" : "") + dis +
+      '<label class="check"><input type="checkbox" id="artefactsToggle"' + (S.input.artefacts ? " checked" : "") + dis +
       "> Generate artefacts (one extra model call)</label>" +
       '<button type="button" class="btn btn-ghost" data-action="load-sample"' + dis + ">Load recorded sample</button></div>";
     if (S.running) {
       h += '<div class="running-box" role="status"><div class="spinner" aria-hidden="true"></div><div><div class="elapsed" id="elapsed">' +
-        fmtTime(Date.now() - S.startedAt) + "</div><div class=\"small muted\">Running the whole pipeline as one request (" + (S.input.artefacts ? "about 8" : "about 7") +
-        " model calls). The server reports no per-stage progress, so none is shown. Usually under a minute; the model service may retry.</div></div></div>";
-    } else {
-      h += '<p class="hint" style="margin-top:10px">One request to <code>/agents/pipeline</code>; results appear in every tab when it finishes.</p>';
+        fmtTime(Date.now() - S.startedAt) + '</div><div class="muted">Running the whole pipeline as one request (' + (S.input.artefacts ? "about 8" : "about 7") +
+        " model calls). The server reports no per-stage progress, so none is shown.</div></div></div>";
     }
     h += "</div>";
 
-    h += '<div class="card"><div class="card-head"><h3>How the pipeline works</h3><div class="legend"><span class="dashed" style="--c:#B26CFF">LLM step (dashed)</span>' +
-      '<span style="--c:#9A9AA4">Code step (solid)</span></div></div>' + Charts.pipeline() +
-      '<p class="hint" style="margin-top:8px">The SDLC model is chosen by deterministic scoring; the LLM only rates traits (with evidence) and writes the explanation.</p></div>';
+    h += '<details class="card more"><summary>How the pipeline works</summary><div class="legend"><span class="dashed" style="--c:#B26CFF">LLM step (dashed)</span>' +
+      '<span style="--c:#9A9AA4">Code step (solid)</span></div>' + Charts.pipeline() +
+      '<p class="caption">The SDLC model is chosen by deterministic scoring; the LLM only rates traits (with evidence) and writes the explanation.</p></details>';
     return h;
   }
 
@@ -353,45 +448,47 @@
     var r = S.result.requirements, q = S.result.quality || { flags: [], counts: {} };
     var flagsBy = {};
     (q.flags || []).forEach(function (f) { (f.requirement_ids || []).forEach(function (id) { (flagsBy[id] = flagsBy[id] || []).push(f); }); });
-    var h = '<div class="card"><div class="card-head"><h2>Requirements</h2><span class="chip accent">' + esc(r.domain_inferred) + "</span></div>" +
-      '<div class="grid-3"><div><div class="stat-label">Functional</div><div class="stat">' + (r.functional_requirements || []).length + "</div></div>" +
-      '<div><div class="stat-label">Non-functional</div><div class="stat">' + (r.non_functional_requirements || []).length + "</div></div>" +
-      '<div><div class="stat-label">Quality flags</div><div class="stat">' + (q.flags || []).length + '</div><div class="small muted">' +
-      Object.keys(q.counts || {}).map(function (k) { return esc(k) + " " + q.counts[k]; }).join(" &middot; ") + "</div></div></div>";
-    if ((r.assumptions || []).length) h += '<h4 style="margin-top:14px">Project assumptions</h4>' + list(r.assumptions);
-    h += "</div>";
-    if (S.sample) h += '<div class="notice"><strong>Recorded sample:</strong> there is no stored run, so accept, reject, modify and regenerate are disabled.</div>';
-    else if (S.role === "auditor") h += '<div class="notice">The auditor role is read-only; review actions are disabled.</div>';
+    var nf = (q.flags || []).length;
+    var h = intro("Requirements", "Every requirement taken from the scenario, with its status. Open a row for its source quote, acceptance criteria and quality flags.",
+      '<span class="chip accent">' + esc(r.domain_inferred) + "</span>");
+    h += '<p class="summary-line">' + (r.functional_requirements || []).length + " functional and " + (r.non_functional_requirements || []).length +
+      " non-functional requirements; " + nf + " quality flag" + (nf === 1 ? "" : "s") + "." +
+      ((r.assumptions || []).length ? " Project assumptions: " + esc(r.assumptions.join("; ")) + "." : "") + "</p>";
+    if (S.sample) h += '<p class="notice">Recorded sample: there is no stored run, so the review buttons are disabled.</p>';
+    else if (S.role === "auditor") h += '<p class="notice">The auditor role is read-only; review buttons are disabled.</p>';
 
-    h += '<div class="table-wrap"><table><thead><tr><th>ID</th><th>Requirement</th><th>Categories</th><th>Risk / confidence</th><th>Source</th>' +
-      "<th>Quality</th><th>Status</th><th>Review</th></tr></thead><tbody>";
-    allReqs().forEach(function (x) {
+    var rows = allReqs().map(function (x) {
       var it = item("requirement", x.id), flags = flagsBy[x.id] || [];
       var disabled = !live() || S.role === "auditor" || !it || it.status === "superseded";
       var who = canReviewReq(x);
-      h += "<tr><td><span class=\"id\">" + esc(x.id) + '</span><div class="small muted">' + esc(x.type) + " &middot; " + esc(x.priority) + " priority</div></td>" +
-        "<td>" + esc(x.requirement) +
-        (x.acceptance_criteria && x.acceptance_criteria.length ? '<div class="small muted" style="margin-top:6px">Acceptance criteria</div>' + list(x.acceptance_criteria) : "") +
-        (x.business_justification ? '<div class="small muted" style="margin-top:6px">Why: ' + esc(x.business_justification) + "</div>" : "") +
-        (x.dependencies && x.dependencies.length ? '<div class="small muted">Depends on: ' + esc(x.dependencies.join(", ")) + "</div>" : "") +
-        (x.assumptions && x.assumptions.length ? '<div class="small muted">Assumes: ' + esc(x.assumptions.join("; ")) + "</div>" : "") + "</td>" +
-        "<td>" + chips(x.categories) + (x.applicable_regulations && x.applicable_regulations.length ? '<div class="small muted" style="margin-top:4px">Regulations</div>' + chips(x.applicable_regulations, "accent") : "") + "</td>" +
-        "<td>Risk " + level(x.risk_level) + '<div style="margin-top:4px">Conf. ' + level(x.confidence) + "</div></td>" +
-        "<td>" + esc(x.source_stakeholder || "-") +
-        (x.source_text ? '<div class="quote">&ldquo;' + esc(x.source_text) + '&rdquo;<span class="src">' + esc(x.source_document ? "from " + x.source_document : "from the scenario or an interview answer") + "</span></div>"
-          : '<div class="flag">No supporting quote (inferred)</div>') + "</td>" +
-        "<td>" + (flags.length ? flags.map(function (f) {
-          return '<span class="badge warn">' + esc(f.type) + '</span><div class="small">' + esc(f.reason) + "</div>" +
-            (f.suggested_fix ? '<div class="small muted">Fix: ' + esc(f.suggested_fix) + "</div>" : "") +
-            '<div class="small muted">' + esc((f.requirement_ids || []).join(", ")) + " &middot; " + esc(f.detected_by) + "</div>";
-        }).join('<div style="height:6px"></div>') : '<span class="muted">-</span>') + "</td>" +
-        "<td>" + statusBadge(it ? it.status : x.approval_status) + (it ? '<div class="ver">v' + it.version + (it.history.length > 1 ? " (" + it.history.length + " versions)" : "") + "</div>" : "") + "</td>" +
-        '<td><div class="req-actions">' + ["accept", "reject", "modify", "regenerate"].map(function (a) {
-          return '<button type="button" class="btn btn-sm" data-action="review" data-type="requirement" data-id="' + esc(x.id) + '" data-act="' + a + '"' +
-            (disabled ? " disabled" : "") + ' title="Reviewer: ' + esc(who.join(" or ")) + '">' + a.charAt(0).toUpperCase() + a.slice(1) + "</button>";
-        }).join("") + '<span class="ver">' + esc(who.join(" / ")) + "</span></div></td></tr>";
+      var detail = kv([
+        ["Source", esc(x.source_stakeholder || "-") + (x.source_text ? quote(x.source_text, x.source_document ? "from " + x.source_document : "from the scenario or an interview answer")
+          : ' <span class="flag">No supporting quote (inferred)</span>')],
+        ["Acceptance criteria", list(x.acceptance_criteria)],
+        ["Why", esc(x.business_justification || "")],
+        ["Risk level", level(x.risk_level)],
+        ["Type", esc(x.type)],
+        ["Depends on", (x.dependencies || []).length ? esc(x.dependencies.join(", ")) : ""],
+        ["Assumes", (x.assumptions || []).length ? esc(x.assumptions.join("; ")) : ""],
+        ["Regulations", (x.applicable_regulations || []).length ? esc(x.applicable_regulations.join(", ")) : ""],
+        ["Quality flags", flags.length ? "<ul>" + flags.map(function (f) {
+          return "<li>" + badge(cap(f.type), true) + " " + esc(f.reason) + (f.suggested_fix ? ' <span class="muted">Fix: ' + esc(f.suggested_fix) + "</span>" : "") + "</li>";
+        }).join("") + "</ul>" : ""],
+        ["Reviewer", esc(who.join(" or "))],
+        ["More actions", reviewButtons("requirement", x.id, ["modify", "regenerate"], disabled, "Reviewer: " + who.join(" or "))],
+        ["Versions", it && it.history.length > 1 ? esc(it.history.map(function (v) { return "v" + v.version + " " + v.status; }).join(", ")) : ""]
+      ]);
+      return { key: x.id, label: x.id, detail: detail, cells: [
+        '<span class="id">' + esc(x.id) + "</span>" + (flags.length ? " " + badge(flags.length + " flag" + (flags.length === 1 ? "" : "s"), true) : ""),
+        esc(x.requirement),
+        esc((x.categories || []).join(", ")),
+        esc(x.priority),
+        level(x.confidence, "Low"),
+        statusBadge(it ? it.status : x.approval_status) + (it ? ' <span class="ver">v' + it.version + "</span>" : ""),
+        reviewButtons("requirement", x.id, ["accept", "reject"], disabled, "Reviewer: " + who.join(" or "))
+      ] };
     });
-    h += "</tbody></table></div>";
+    h += xtable("req", ["ID", "Statement", "Category", "Priority", "Confidence", "Status", "Actions"], rows);
     return h;
   }
 
@@ -400,80 +497,81 @@
     if (!S.result) return needResult("compliance analysis");
     var c = S.result.compliance || {}, cm = S.result.compliance_mapping || { requirements: [] }, rr = S.result.risk_register;
     var note = String(cm.notice || "").replace(/^Not a legal determination\.\s*/, "");
-    var h = '<div class="notice"><strong>Not a legal determination.</strong> ' + esc(note) + "</div>";
-    h += '<div class="card"><div class="card-head"><h2>Compliance</h2><span>Overall risk ' + level(c.risk_level) + "</span></div>" +
-      "<p>" + esc(c.summary || "") + "</p>" +
-      '<div class="grid-3"><div><div class="stat-label">Knowledge-base coverage</div><div>' + statusBadge(c.kb_relevance) +
-      (c.domain_tags && c.domain_tags.length ? '<div class="small muted" style="margin-top:4px">Domain tags: ' + esc(c.domain_tags.join(", ")) + "</div>" : "") + "</div></div>" +
-      '<div><div class="stat-label">Sources used / consulted</div><div class="small">' + esc((c.sources_used || []).join(", ") || "-") +
-      '</div><div class="small muted">of ' + esc((c.sources_consulted || []).join(", ") || "-") + "</div></div>" +
-      '<div><div class="stat-label">Need human review</div><div class="stat">' + (cm.review_count || 0) + "</div></div></div>";
-    if (c.kb_relevance && c.kb_relevance !== "relevant") {
-      h += '<div class="notice" style="margin-top:12px">The knowledge base does not cover this domain well; findings below are limited to what was retrieved.</div>';
-    }
-    h += "</div>";
+    var h = intro("Compliance and risk", "How each requirement maps to the knowledge base, which findings a person must check, and the project's risk register.");
+    h += '<p class="notice"><strong>Not a legal determination.</strong> ' + esc(note) + "</p>";
+    h += '<div class="card"><div class="stats">' +
+      '<div><div class="stat-label">Overall compliance risk</div><div>' + level(c.risk_level) + "</div></div>" +
+      '<div><div class="stat-label">Knowledge-base coverage</div><div>' + badge(cap(c.kb_relevance || "-"), c.kb_relevance && c.kb_relevance !== "relevant") + "</div></div>" +
+      '<div><div class="stat-label">Sources used</div><div>' + esc((c.sources_used || []).join(", ") || "-") + "</div></div>" +
+      '<div><div class="stat-label">Need review</div><div class="stat">' + (cm.review_count || 0) + "</div></div></div>" +
+      (c.summary ? '<p class="summary-line">' + esc(c.summary) + "</p>" : "") +
+      (c.kb_relevance && c.kb_relevance !== "relevant" ? '<p class="notice">The knowledge base does not cover this domain well; findings are limited to what was retrieved.</p>' : "") + "</div>";
 
-    h += "<h3>Per-requirement mapping</h3>";
+    h += '<h3 class="section-title">Compliance mapping</h3><p class="section-sub">One row per requirement and knowledge-base source. Open a row for the required control, evidence quote and review reasons.</p>';
+    var rows = [];
     (cm.requirements || []).forEach(function (m) {
       var req = reqById(m.requirement_id);
-      h += '<div class="card"><div class="card-head"><div><span class="id" style="font-family:Poppins,sans-serif;font-weight:700;color:#C79CFF">' + esc(m.requirement_id) + "</span> " +
-        esc(req ? req.requirement : "") + "</div>" + (m.needs_human_review ? '<span class="badge warn">Needs human review</span>' : '<span class="badge ok">No review flag</span>') + "</div>";
-      if (m.review_reasons && m.review_reasons.length) h += '<div class="small" style="color:#F5C46B">' + esc(m.review_reasons.join("; ")) + "</div>";
-      if (!m.mappings || !m.mappings.length) h += '<p class="muted small">No knowledge-base content matched this requirement.</p>';
-      (m.mappings || []).forEach(function (mp) {
-        var it = item("compliance", m.requirement_id + "/" + mp.source);
-        var generic = mp.scope !== "domain-specific";
-        h += '<div class="card inner" style="margin:10px 0 0"><div class="card-head"><div><strong>' + esc(mp.regulation) + '</strong> <span class="chip' +
-          (generic ? "" : " accent") + '">' + esc(generic ? "generic baseline" : "domain-specific") + "</span></div><div>" + statusBadge(mp.status || "no status") +
-          " Confidence " + level(mp.confidence) + ' <span class="small muted">distance ' + esc(mp.distance) + "</span></div></div>" +
-          '<div class="small muted">' + esc(mp.source) + " &middot; " + esc(mp.jurisdiction) + " &middot; version " + esc(mp.version) +
-          (mp.effective_date ? " &middot; KB entry dated " + esc(mp.effective_date) : "") + " &middot; chunk " + esc(mp.chunk_id) + "</div>" +
-          (mp.required_control ? '<p style="margin:8px 0 4px"><strong>Required control:</strong> ' + esc(mp.required_control) + "</p>" : "") +
-          (mp.compliance_gap ? '<p style="margin:0 0 4px;color:#FF8A8A"><strong>Gap:</strong> ' + esc(mp.compliance_gap) + "</p>" : "") +
-          (mp.evidence ? '<div class="quote">&ldquo;' + esc(mp.evidence) + '&rdquo;<span class="src">' + esc(mp.source) + " knowledge-base text (paraphrased principles) &middot; " +
-            (mp.evidence_verified ? "quote verified against the retrieved text" : "quote NOT found in the retrieved text") + "</span></div>" : "") +
-          (mp.checkpoints && mp.checkpoints.length ? '<div class="small"><strong>Checkpoints:</strong> ' + esc(mp.checkpoints.join("; ")) + "</div>" : "") +
-          (mp.retention_and_reporting && mp.retention_and_reporting.length ? '<div class="small"><strong>Retention and reporting:</strong> ' + esc(mp.retention_and_reporting.join("; ")) + "</div>" : "");
-        if (generic) {
-          h += '<div class="small muted" style="margin-top:6px">Generic baseline: shown for context, not an approval item.</div>';
-        } else {
-          var dis = !live() || S.role === "auditor" || !it;
-          h += '<div class="btn-row" style="margin-top:8px">' + (it ? statusBadge(it.status) + ' <span class="ver">v' + it.version + "</span>" : S.sample ? "" : '<span class="ver">not registered</span>') +
-            ["accept", "reject", "modify"].map(function (a) {
-              return '<button type="button" class="btn btn-sm" data-action="review" data-type="compliance" data-id="' + esc(m.requirement_id + "/" + mp.source) + '" data-act="' + a + '"' +
-                (dis ? " disabled" : "") + ' title="Reviewer: compliance officer">' + a.charAt(0).toUpperCase() + a.slice(1) + "</button>";
-            }).join("") + '<span class="ver">reviewer: compliance officer</span></div>';
-        }
-        h += "</div>";
+      var reasons = (m.review_reasons || []).length ? "<ul>" + m.review_reasons.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>" : "";
+      if (!m.mappings || !m.mappings.length) {
+        rows.push({ key: m.requirement_id + ":none", label: m.requirement_id, detail: kv([["Requirement", esc(req ? req.requirement : "")], ["Review reasons", reasons]]),
+          cells: ['<span class="id">' + esc(m.requirement_id) + "</span>", '<span class="muted">No knowledge-base match</span>', "-", "-",
+                  m.needs_human_review ? badge("Review", true) : "-", ""] });
+        return;
+      }
+      m.mappings.forEach(function (mp) {
+        var it = item("compliance", m.requirement_id + "/" + mp.source), generic = mp.scope !== "domain-specific";
+        var detail = kv([
+          ["Requirement", esc(req ? req.requirement : "")],
+          ["Regulation", esc(mp.regulation) + ' <span class="muted">(' + esc(generic ? "generic baseline" : "domain-specific") + ")</span>"],
+          ["Jurisdiction", esc(mp.jurisdiction) + ", KB entry version " + esc(mp.version) + (mp.effective_date ? ", dated " + esc(mp.effective_date) : "")],
+          ["Match", "chunk " + esc(mp.chunk_id) + ", distance " + esc(mp.distance)],
+          ["Required control", esc(mp.required_control || "")],
+          ["Gap", esc(mp.compliance_gap || "")],
+          ["Evidence", mp.evidence ? quote(mp.evidence, (mp.evidence_verified ? "Verified against the retrieved text" : "Not found in the retrieved text") + " (paraphrased principles)") : ""],
+          ["Checkpoints", (mp.checkpoints || []).length ? esc(mp.checkpoints.join("; ")) : ""],
+          ["Retention and reporting", (mp.retention_and_reporting || []).length ? esc(mp.retention_and_reporting.join("; ")) : ""],
+          ["Review reasons", reasons],
+          ["Approval", it ? statusBadge(it.status) + ' <span class="ver">v' + it.version + "</span>" : ""],
+          ["More actions", generic ? "" : reviewButtons("compliance", m.requirement_id + "/" + mp.source, ["modify"], !live() || S.role === "auditor" || !it, "Reviewer: compliance officer")]
+        ]);
+        var dis = !live() || S.role === "auditor" || !it;
+        rows.push({ key: m.requirement_id + "/" + mp.source, label: m.requirement_id + " " + mp.source, detail: detail, cells: [
+          '<span class="id">' + esc(m.requirement_id) + "</span>",
+          esc(mp.source) + (generic ? ' <span class="muted">(generic)</span>' : ""),
+          statusBadge(mp.status || "no status"),
+          level(mp.confidence, "Low"),
+          m.needs_human_review ? badge("Review", true) : "-",
+          generic ? '<span class="muted">Context only</span>' : reviewButtons("compliance", m.requirement_id + "/" + mp.source, ["accept", "reject"], dis, "Reviewer: compliance officer")
+        ] });
       });
-      h += "</div>";
     });
+    h += xtable("map", ["Requirement", "Source", "Status", "Confidence", "Review", "Actions"], rows, "No requirements to map.");
+
     if ((c.dropped_considerations || []).length) {
-      h += '<div class="card"><h3>Dropped model claims</h3><p class="small muted">Considerations the model returned that could not be tied to retrieved text; they are not shown above.</p>' +
-        list(c.dropped_considerations.map(function (d) { return typeof d === "string" ? d : JSON.stringify(d); })) + "</div>";
+      h += '<details class="card more"><summary>Dropped model claims (' + c.dropped_considerations.length + ")</summary>" +
+        '<p class="muted">Claims the model made that could not be tied to retrieved text; they are not used above.</p>' +
+        list(c.dropped_considerations.map(function (d) { return typeof d === "string" ? d : (d.source || "") + ": " + (d.note || "") + (d.reason ? " (" + d.reason + ")" : ""); })) + "</details>";
     }
 
-    h += '<div class="card"><h3>Retrieved knowledge-base chunks</h3><div class="table-wrap"><table><thead><tr><th>Chunk</th><th>Source</th><th>Scope</th><th>Distance</th><th>Matched requirements</th><th>Applies to domain</th></tr></thead><tbody>' +
-      (c.retrieved_chunks || []).map(function (k) {
-        return "<tr><td><code>" + esc(k.id) + "</code></td><td>" + esc(k.source) + "</td><td>" + esc(k.scope) + "</td><td>" + esc(k.distance) + "</td><td>" +
-          esc((k.matched_requirement_ids || []).join(", ")) + "</td><td>" + (k.applies_to_domain ? "yes" : "no") + "</td></tr>";
-      }).join("") + '</tbody></table></div><p class="hint" style="margin-top:6px">Squared-L2 distance; lower is closer. Matches above 0.62 are discarded.</p></div>';
+    h += '<h3 class="section-title">Retrieved knowledge-base chunks</h3><p class="section-sub">Paragraphs whose distance passed the 0.62 threshold (squared L2; lower is closer).</p>' +
+      xtable("chunk", ["Chunk", "Source", "Distance", "Used for this domain"], (c.retrieved_chunks || []).map(function (k) {
+        return { key: k.id, label: k.id, detail: kv([["Scope", esc(k.scope)], ["Matched requirements", ids(k.matched_requirement_ids)]]),
+          cells: ["<code>" + esc(k.id) + "</code>", esc(k.source), esc(k.distance), k.applies_to_domain ? "Yes" : '<span class="muted">No</span>'] };
+      }), "No chunk passed the threshold.");
 
     if (rr) {
       var risks = (rr.risks || []).slice().sort(function (a, b) { return b.score - a.score || a.rank - b.rank; });
       var bl = (rr.summary && rr.summary.by_level) || {};
-      h += '<div class="card"><div class="card-head"><h2>Risk register</h2><span class="small muted">' + esc(rr.scoring || "") + "</span></div>" +
-        '<div class="grid-2" style="align-items:start"><div style="max-width:380px">' + Charts.riskGrid(risks) + '<div class="heat-legend" style="margin-top:6px">score ' +
-        Charts.colors.heat.map(function (c2, i) { return '<i style="background:' + c2 + '" title="band ' + (i + 1) + '"></i>'; }).join("") + " higher</div></div>" +
-        '<div class="grid-3"><div><div class="stat-label">High</div><div class="stat">' + (bl.High || 0) + '</div></div><div><div class="stat-label">Medium</div><div class="stat">' +
+      h += '<h3 class="section-title">Risk register</h3><p class="section-sub">Likelihood times impact, each rated 1 to 5 against written anchors: ' + esc(rr.scoring || "") + ".</p>" +
+        '<div class="card risk-top"><div class="risk-grid">' + Charts.riskGrid(risks) + '<p class="caption">Each cell is likelihood by impact; darker is a higher score. Labels are risk numbers.</p></div>' +
+        '<div class="stats stats-3"><div><div class="stat-label">High</div><div class="stat">' + (bl.High || 0) + '</div></div><div><div class="stat-label">Medium</div><div class="stat">' +
         (bl.Medium || 0) + '</div></div><div><div class="stat-label">Low</div><div class="stat">' + (bl.Low || 0) + "</div></div></div></div>" +
-        '<div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>Risk</th><th>Description</th><th>Category</th><th>Likelihood</th><th>Impact</th><th>Score</th><th>Mitigation</th><th>Requirements</th></tr></thead><tbody>' +
-        risks.map(function (x) {
-          return '<tr><td><span class="id">' + esc(x.id) + '</span><div class="ver">rank ' + esc(x.rank) + "</div></td><td>" + esc(x.description) + "</td><td>" + esc(x.category) +
-            "</td><td><strong>" + x.likelihood + '</strong><div class="small muted">' + esc(x.likelihood_reason) + "</div></td><td><strong>" + x.impact +
-            '</strong><div class="small muted">' + esc(x.impact_reason) + "</div></td><td><strong>" + x.score + "</strong> " + level(x.level) + "</td><td>" + esc(x.mitigation) +
-            "</td><td>" + esc((x.linked_requirement_ids || []).join(", ")) + "</td></tr>";
-        }).join("") + "</tbody></table></div></div>";
+        xtable("risk", ["Risk", "Description", "Category", "Likelihood", "Impact", "Score"], risks.map(function (x) {
+          return { key: x.id, label: x.id, detail: kv([["Likelihood reason", esc(x.likelihood_reason)], ["Impact reason", esc(x.impact_reason)],
+                                                          ["Mitigation", esc(x.mitigation)], ["Requirements", ids(x.linked_requirement_ids)]]),
+            cells: ['<span class="id">' + esc(x.id) + "</span>", esc(x.description), esc(x.category), esc(x.likelihood), esc(x.impact),
+                    "<strong>" + esc(x.score) + "</strong> " + level(x.level)] };
+        }));
     }
     return h;
   }
@@ -484,15 +582,8 @@
     var s = S.result.sdlc_recommendation, models = s.scored_models || [], top = models[0] || {};
     var winner = models.filter(function (m) { return m.model === s.recommended_model; })[0] || top;
     var it = item("sdlc", "sdlc");
-    var override = s.human_override || (it && it.content && it.content.human_override ? it.content.recommended_model : null);
-    var h = '<div class="card"><div class="hero"><div><div class="hero-label">Recommended SDLC model</div><div class="hero-model">' + esc(s.recommended_model) +
-      '</div><div class="small muted">Deterministic fit score against fixed model profiles; the LLM rated the traits but did not choose the model.</div>' +
-      (override ? '<div class="banner warn" style="margin-top:10px"><div>Reviewers changed the selection to <strong>' + esc(override) + "</strong> (human override).</div></div>" : "") +
-      '</div><div style="text-align:right"><div class="hero-pct">' + esc(winner.percent || "") + '</div><div class="stat-label">fit score</div></div></div></div>';
-    if (s.is_close_call && models[1]) {
-      h += '<div class="banner warn" style="margin-bottom:16px"><div><strong>Close call:</strong> ' + esc(models[0].model + " " + models[0].percent + " vs " + models[1].model + " " + models[1].percent) +
-        ". The top two are within 5 points; treat both as reasonable and let the approvers decide.</div></div>";
-    }
+    var h = intro("SDLC recommendation", "The model whose fixed profile best fits the project's 15 rated traits, with the reasons, the full ranking and the workflow.");
+    h += heroCard(s);
     var j = s.justification || {};
     h += '<div class="card"><h3>Why this model</h3><div class="grid-2">' +
       [["Requirement characteristics", j.requirement_characteristics], ["Project characteristics", j.project_characteristics],
@@ -500,49 +591,51 @@
         return "<div><h4>" + esc(p[0]) + "</h4><p>" + esc(p[1] || "-") + "</p></div>";
       }).join("") + "</div></div>";
 
-    h += '<div class="grid-2 charts-row"><div class="card"><h3>Traits vs ' + esc(winner.model) + ' profile</h3>' +
-      Charts.radar(TRAIT_KEYS, TRAIT_LABELS, s.traits || {}, winner.profile, winner.model) +
-      '<div class="legend"><span style="--c:#B26CFF">This project (rated 1-5)</span><span class="dashed" style="--c:#C79CFF">' + esc(winner.model) + " typical profile</span></div></div>" +
-      '<div class="card"><h3>Ranking of all seven models</h3>' + Charts.bars(models, s.recommended_model) +
-      '<p class="hint">Scores are a 0-100 weighted fit, not probabilities.</p></div></div>';
-    h += '<div class="card"><h3>Why not the others</h3><ul class="why-list">' +
+    h += '<div class="card chart-card"><h3>Project traits against the ' + esc(winner.model) + ' profile</h3>' +
+      '<div class="chart-box">' + Charts.radar(TRAIT_KEYS, TRAIT_LABELS, s.traits || {}, winner.profile, winner.model) + "</div>" +
+      '<div class="legend"><span style="--c:#B26CFF">This project (rated 1-5)</span><span class="dashed" style="--c:#C79CFF">' + esc(winner.model) + " typical profile</span></div>" +
+      '<p class="caption">Where the two shapes overlap, the project fits the model; gaps show the traits that pull towards other models.</p></div>';
+
+    h += '<div class="card chart-card"><h3>Ranking of all seven models</h3><div class="chart-box narrow">' + Charts.bars(models, s.recommended_model) + "</div>" +
+      '<p class="caption">Scores are a 0-100 weighted fit to each model\'s profile, not probabilities.</p>' +
+      '<details class="more"><summary>Why not the others</summary><ul class="why-list">' +
       models.filter(function (m) { return m.why_not; }).map(function (m) {
         return "<li><strong>" + esc(m.model) + "</strong> (" + esc(m.percent) + "): " + esc(m.why_not) + "</li>";
-      }).join("") + "</ul></div>";
+      }).join("") + "</ul></details></div>";
 
-    h += '<div class="card"><div class="card-head"><h3>Trait-by-model heat matrix</h3><div class="heat-legend">1 ' +
-      Charts.colors.heat.map(function (c2, i) { return '<i style="background:' + c2 + '" title="' + (i + 1) + '"></i>'; }).join("") + ' 5</div></div><div style="overflow-x:auto">' +
-      Charts.heatMatrix(TRAIT_KEYS, TRAIT_LABELS, s.traits || {}, models, s.recommended_model) + "</div></div>";
+    h += '<div class="card chart-card"><div class="card-head"><h3>Trait-by-model heat matrix</h3><div class="heat-legend">1 ' +
+      Charts.colors.heat.map(function (c2, i) { return '<i style="background:' + c2 + '" title="' + (i + 1) + '"></i>'; }).join("") + " 5</div></div>" +
+      '<div class="chart-box scroll-x">' + Charts.heatMatrix(TRAIT_KEYS, TRAIT_LABELS, s.traits || {}, models, s.recommended_model) + "</div>" +
+      '<p class="caption">Each column is a model\'s typical rating for each trait; the outlined first column is this project. Darker means higher.</p></div>';
 
     var td = s.trait_details || {};
-    h += '<div class="card"><h3>Trait ratings and evidence</h3><div class="table-wrap"><table><thead><tr><th>Trait</th><th>Score</th><th>Evidence</th><th>Reason</th></tr></thead><tbody>' +
-      TRAIT_KEYS.map(function (k) {
+    h += '<h3 class="section-title">Trait ratings</h3><p class="section-sub">The LLM\'s rating for each trait. Open a row for its evidence and reason.</p>' +
+      xtable("trait", ["Trait", "Score"], TRAIT_KEYS.map(function (k) {
         var d = td[k] || { score: (s.traits || {})[k] };
-        return "<tr><td>" + esc(TRAIT_LABELS[k]) + "</td><td><strong>" + esc(d.score) + "</strong>/5</td><td>" + esc(d.evidence || "-") + "</td><td>" + esc(d.reason || "-") + "</td></tr>";
-      }).join("") + "</tbody></table></div></div>";
+        return { key: k, label: TRAIT_LABELS[k], detail: kv([["Evidence", esc(d.evidence || "")], ["Reason", esc(d.reason || "")]]),
+          cells: [esc(TRAIT_LABELS[k]), "<strong>" + esc(d.score) + "</strong> / 5"] };
+      }));
 
     h += sdlcApprovalCard(s, it);
-    h += workflowCard(S.result.sdlc_workflow);
+    h += workflowSection(S.result.sdlc_workflow);
     return h;
   }
 
   function sdlcApprovalCard(s, it) {
     var ar = s.approval_required || {};
     var accepted = it ? it.accepted_by || [] : ar.approved_by || [];
-    var h = '<div class="card"><div class="card-head"><h3>SDLC approval (four approvers)</h3>' + statusBadge(it ? it.status : ar.status) + "</div>";
+    var h = '<div class="card"><div class="card-head"><h3>SDLC approval</h3>' + statusBadge(it ? it.status : ar.status) + "</div>" +
+      '<p class="muted">All four roles must accept the same version.</p>';
     h += '<div class="approver-grid">' + SDLC_APPROVERS.map(function (r) {
       var yes = accepted.indexOf(r) >= 0;
-      return '<div class="approver' + (yes ? " yes" : "") + '"><div class="who">' + esc(r.charAt(0).toUpperCase() + r.slice(1)) + '</div><div class="small ' + (yes ? "" : "muted") + '">' +
+      return '<div class="approver' + (yes ? " yes" : "") + '"><div class="who">' + esc(cap(r)) + '</div><div class="' + (yes ? "" : "muted") + '">' +
         (yes ? "Accepted" : "Awaiting") + "</div></div>";
     }).join("") + "</div>";
-    if (S.sample) h += '<p class="small muted" style="margin-top:10px">Recorded sample: approvals are not stored, so all four show as awaiting.</p>';
-    else if (ar.note && !it) h += '<p class="small muted" style="margin-top:10px">' + esc(ar.note) + "</p>";
+    if (S.sample) h += '<p class="muted">Recorded sample: approvals are not stored, so all four show as awaiting.</p>';
     if (it) {
       var dis = !live() || SDLC_APPROVERS.indexOf(S.role) < 0;
-      h += '<div class="btn-row" style="margin-top:12px"><span class="ver">v' + it.version + "</span>" + ["accept", "reject", "modify", "regenerate"].map(function (a) {
-        return '<button type="button" class="btn btn-sm" data-action="review" data-type="sdlc" data-id="sdlc" data-act="' + a + '"' + (dis ? " disabled" : "") + ">" +
-          a.charAt(0).toUpperCase() + a.slice(1) + "</button>";
-      }).join("") + '<span class="ver">' + (SDLC_APPROVERS.indexOf(S.role) < 0 ? "Your role is not one of the four approvers." : "Acting as " + esc(S.role)) + "</span></div>";
+      h += '<div class="btn-row"><span class="ver">v' + it.version + "</span>" + reviewButtons("sdlc", "sdlc", ["accept", "reject", "modify", "regenerate"], dis) +
+        '<span class="muted">' + (SDLC_APPROVERS.indexOf(S.role) < 0 ? "Your role is not one of the four approvers." : "Acting as " + esc(S.role) + ".") + "</span></div>";
     }
     return h + "</div>";
   }
@@ -554,93 +647,105 @@
       return "<li>" + esc(x.text) + (added ? ' <span class="chip accent" title="' + esc(x.reason || "") + '">added' + (x.requirement_ids && x.requirement_ids.length ? ": " + esc(x.requirement_ids.join(", ")) : "") + "</span>" : "") + "</li>";
     }).join("") + "</ul>";
   }
-  function workflowCard(w) {
+  function workflowSection(w) {
     if (!w) return "";
-    var cols = [["activities", "Activities"], ["responsible_roles", "Roles"], ["deliverables", "Deliverables"], ["security_activities", "Security"],
-                ["testing_requirements", "Testing"], ["compliance_checkpoints", "Compliance checkpoints"], ["approval_gates", "Approval gates"],
+    var more = [["security_activities", "Security"], ["testing_requirements", "Testing"], ["compliance_checkpoints", "Compliance checkpoints"],
                 ["entry_criteria", "Entry criteria"], ["exit_criteria", "Exit criteria"], ["traceability_requirements", "Traceability"]];
-    return '<div class="card"><div class="card-head"><h3>' + esc(w.model) + ' workflow</h3><span class="small muted">' + esc(w.added_items || 0) + " project-specific items added; linked requirements: " +
-      esc((w.requirements_linked || []).join(", ") || "-") + '</span></div><p class="small muted">' + esc(w.notice || "") + '</p><div class="table-wrap"><table class="wide"><thead><tr><th>#</th><th>Phase</th>' +
-      cols.map(function (c) { return "<th>" + c[1] + "</th>"; }).join("") + "</tr></thead><tbody>" +
-      (w.phases || []).map(function (p) {
-        return "<tr><td>" + esc(p.order) + "</td><td><strong>" + esc(p.name) + "</strong></td>" + cols.map(function (c) { return "<td>" + wfCell(p[c[0]]) + "</td>"; }).join("") + "</tr>";
-      }).join("") + "</tbody></table></div></div>";
+    return '<h3 class="section-title">' + esc(w.model) + ' workflow</h3><p class="section-sub">' + esc(w.added_items || 0) +
+      " project-specific items were added to the fixed template (marked \"added\"). Open a phase for security, testing, compliance and entry and exit criteria.</p>" +
+      xtable("wf", ["Phase", "Activities", "Roles", "Deliverables", "Approval gates"], (w.phases || []).map(function (p) {
+        return { key: String(p.order), label: p.name, detail: kv(more.map(function (c) { return [c[1], wfCell(p[c[0]])]; })),
+          cells: ["<strong>" + esc(p.order + ". " + p.name) + "</strong>", wfCell(p.activities), wfCell(p.responsible_roles), wfCell(p.deliverables), wfCell(p.approval_gates)] };
+      }));
   }
 
   // ---------------------------------------------------------------- view: artefacts
+  var ART_TEXT = {
+    stories: "One or more stories per functional requirement, with acceptance criteria and the statements they come from.",
+    usecases: "The main interactions, with actor, flows and conditions.",
+    workflows: "End-to-end business processes, step by step.",
+    data: "Data the system stores and the interfaces it needs.",
+    rtm: "Built by code: each requirement linked to its source, compliance sources, risks and artefacts.",
+    controls: "Built from the compliance mapping. Not a legal determination; the knowledge base is paraphrased principles, not law text.",
+    assumptions: "Assumptions the requirements rely on, and which requirements depend on others.",
+    issues: "Everything still open: quality flags, compliance reviews, pending approvals and unreviewed generated items."
+  };
   function srcList(ss) {
     if (!ss || !ss.length) return "";
-    return '<div class="small muted" style="margin-top:6px">Sources:</div>' + ss.map(function (s) {
-      return '<div class="quote">' + (s.statement ? "&ldquo;" + esc(s.statement) + "&rdquo;" : "(no quote; inferred)") + '<span class="src">' + esc(s.requirement_id) + " &middot; " + esc(s.stakeholder) +
-        (s.assumptions && s.assumptions.length ? " &middot; assumes " + esc(s.assumptions.join("; ")) : "") + "</span></div>";
+    return ss.map(function (s) {
+      return s.statement ? quote(s.statement, s.requirement_id + ", " + s.stakeholder) :
+        '<div class="muted">' + esc(s.requirement_id + ": no quote (inferred" + (s.assumptions && s.assumptions.length ? "; assumes " + s.assumptions.join("; ") : "") + ")") + "</div>";
     }).join("");
   }
-  function table(headers, rows) {
-    if (!rows.length) return '<p class="muted">None generated.</p>';
-    return '<div class="table-wrap"><table><thead><tr>' + headers.map(function (x) { return "<th>" + esc(x) + "</th>"; }).join("") + "</tr></thead><tbody>" +
-      rows.map(function (r) { return "<tr>" + r.map(function (c) { return "<td>" + c + "</td>"; }).join("") + "</tr>"; }).join("") + "</tbody></table></div>";
-  }
-  function ids(a) { return esc((a || []).join(", ") || "-"); }
   function viewArtefacts() {
     if (!S.result || !S.result.artefacts) return needResult("artefacts");
-    var a = S.result.artefacts, h = '<div class="card"><div class="card-head"><h2>Artefacts and SRS</h2><div class="btn-row">' +
-      '<button type="button" class="btn btn-primary" data-action="srs-md">Download SRS (Markdown)</button><button type="button" class="btn" data-action="srs-html">Open printable SRS</button></div></div>' +
-      '<p class="small muted">' + esc(a.generation ? a.generation.note : "") + (S.sample ? " The sample SRS is rebuilt from this recorded result (POST /agents/srs, no model call)." : " The SRS reflects the current approval state of the stored run.") + "</p></div>";
+    var a = S.result.artefacts;
+    var h = intro("Artefacts", "The SRS content generated from the requirements and the matrices built from it.",
+      '<div class="btn-row"><button type="button" class="btn btn-primary" data-action="srs-md">Download SRS (Markdown)</button><button type="button" class="btn" data-action="srs-html">Open printable SRS</button></div>');
+    h += '<p class="summary-line">' + esc(a.generation ? a.generation.note : "") + (S.sample ? " The sample SRS is rebuilt from this recorded result, with no model call." : " The SRS shows the current approval state.") + "</p>";
     h += '<div class="subtabs" role="tablist" aria-label="Artefact types">' + ART_TABS.map(function (t) {
       return '<button type="button" class="subtab" role="tab" aria-selected="' + (S.artTab === t.id) + '" data-action="art-tab" data-tab="' + t.id + '">' + esc(t.name) + "</button>";
     }).join("") + "</div>";
     var t = S.artTab;
+    h += '<p class="section-sub">' + esc(ART_TEXT[t] || "") + "</p>";
     if (t === "stories") {
       h += (a.user_stories || []).map(function (u) {
-        return '<div class="card"><div class="card-head"><span class="id" style="font-family:Poppins;font-weight:700;color:#C79CFF">' + esc(u.id) + '</span><span class="small muted">' + ids(u.requirement_ids) + "</span></div><p><strong>" + esc(u.story) +
-          '</strong></p><div class="small muted">Acceptance criteria</div>' + list(u.acceptance_criteria) + srcList(u.source_statements) + "</div>";
+        return '<div class="card"><div class="card-head"><span class="id">' + esc(u.id) + '</span><span class="muted">' + ids(u.requirement_ids) + "</span></div><p class=\"lead\">" + esc(u.story) +
+          "</p><h4>Acceptance criteria</h4>" + list(u.acceptance_criteria) + '<details class="more"><summary>Source statements</summary>' + srcList(u.source_statements) + "</details></div>";
       }).join("") || '<p class="muted">None generated.</p>';
     } else if (t === "usecases") {
       h += (a.use_cases || []).map(function (u) {
-        return '<div class="card"><div class="card-head"><h3>' + esc(u.id + " " + u.name) + '</h3><span class="small muted">' + ids(u.requirement_ids) + "</span></div><p>Primary actor: <strong>" + esc(u.primary_actor) +
-          '</strong></p><div class="grid-2"><div><h4>Preconditions</h4>' + list(u.preconditions) + "<h4>Main flow</h4><ol>" + (u.main_flow || []).map(function (s) { return "<li>" + esc(s) + "</li>"; }).join("") +
-          "</ol></div><div><h4>Alternative flows</h4>" + list(u.alternative_flows) + "<h4>Postconditions</h4>" + list(u.postconditions) + "</div></div>" + srcList(u.source_statements) + "</div>";
+        return '<div class="card"><div class="card-head"><h3>' + esc(u.id + " " + u.name) + '</h3><span class="muted">' + ids(u.requirement_ids) + "</span></div><p>Primary actor: <strong>" + esc(u.primary_actor) +
+          '</strong></p><div class="grid-2"><div><h4>Main flow</h4><ol>' + (u.main_flow || []).map(function (s) { return "<li>" + esc(s) + "</li>"; }).join("") +
+          "</ol><h4>Alternative flows</h4>" + list(u.alternative_flows) + "</div><div><h4>Preconditions</h4>" + list(u.preconditions) + "<h4>Postconditions</h4>" + list(u.postconditions) + "</div></div>" +
+          '<details class="more"><summary>Source statements</summary>' + srcList(u.source_statements) + "</details></div>";
       }).join("") || '<p class="muted">None generated.</p>';
     } else if (t === "workflows") {
       h += (a.process_workflows || []).map(function (w) {
-        return '<div class="card"><div class="card-head"><h3>' + esc(w.id + " " + w.name) + '</h3><span class="small muted">' + ids(w.requirement_ids) + "</span></div><ol>" +
-          (w.steps || []).map(function (s) { return "<li><strong>" + esc(s.actor) + ":</strong> " + esc(s.action) + "</li>"; }).join("") + "</ol>" + srcList(w.source_statements) + "</div>";
+        return '<div class="card"><div class="card-head"><h3>' + esc(w.id + " " + w.name) + '</h3><span class="muted">' + ids(w.requirement_ids) + "</span></div><ol>" +
+          (w.steps || []).map(function (s) { return "<li><strong>" + esc(s.actor) + ":</strong> " + esc(s.action) + "</li>"; }).join("") + "</ol>" +
+          '<details class="more"><summary>Source statements</summary>' + srcList(w.source_statements) + "</details></div>";
       }).join("") || '<p class="muted">None generated.</p>';
     } else if (t === "data") {
-      h += "<h3>Data requirements</h3>" + table(["ID", "Entity", "Description", "Attributes", "Retention", "Requirements"], (a.data_requirements || []).map(function (d) {
-        return ['<span class="id">' + esc(d.id) + "</span>", esc(d.entity), esc(d.description) + srcList(d.source_statements), list(d.attributes), esc(d.retention || "-"), ids(d.requirement_ids)];
-      }));
-      h += '<h3 style="margin-top:18px">Interface requirements</h3>' + table(["ID", "Name", "Type", "Description", "Requirements"], (a.interface_requirements || []).map(function (d) {
-        return ['<span class="id">' + esc(d.id) + "</span>", esc(d.name), esc(d.interface_type), esc(d.description) + srcList(d.source_statements), ids(d.requirement_ids)];
-      }));
+      h += '<h3 class="section-title">Data requirements</h3>' + xtable("data", ["ID", "Entity", "Description", "Requirements"], (a.data_requirements || []).map(function (d) {
+        return { key: d.id, label: d.id, detail: kv([["Attributes", list(d.attributes)], ["Retention", esc(d.retention || "Not stated")], ["Sources", srcList(d.source_statements)]]),
+          cells: ['<span class="id">' + esc(d.id) + "</span>", esc(d.entity), esc(d.description), ids(d.requirement_ids)] };
+      }), "None generated.");
+      h += '<h3 class="section-title">Interface requirements</h3>' + xtable("iface", ["ID", "Name", "Type", "Requirements"], (a.interface_requirements || []).map(function (d) {
+        return { key: d.id, label: d.id, detail: kv([["Description", esc(d.description)], ["Sources", srcList(d.source_statements)]]),
+          cells: ['<span class="id">' + esc(d.id) + "</span>", esc(d.name), esc(d.interface_type), ids(d.requirement_ids)] };
+      }), "None generated.");
     } else if (t === "rtm") {
-      h += '<p class="small muted">Built by code from the records, compliance mapping, risk register, workflow and artefacts.</p>' +
-        table(["Requirement", "Source", "Compliance", "Risks", "Stories", "Use cases", "Workflows", "Data", "Interfaces", "Workflow items", "Status"], (a.traceability_matrix || []).map(function (r) {
-          return ['<span class="id">' + esc(r.requirement_id) + '</span> <span class="small muted">' + esc(r.type) + '</span><div class="small">' + esc(r.requirement) + "</div>",
-            r.source ? esc(r.source.stakeholder) + (r.source.statement ? '<div class="quote">&ldquo;' + esc(r.source.statement) + "&rdquo;</div>" : "") : "-",
-            (r.compliance_sources || []).map(function (c) { return esc(c.source) + " " + statusBadge(c.status) + " " + level(c.confidence); }).join("<br>") || "-",
-            ids(r.risk_ids), ids(r.user_stories_ids), ids(r.use_cases_ids), ids(r.process_workflows_ids), ids(r.data_requirements_ids), ids(r.interface_requirements_ids),
-            list(r.workflow_items), statusBadge(item("requirement", r.requirement_id) ? item("requirement", r.requirement_id).status : r.approval_status)];
-        }));
+      h += xtable("rtm", ["Requirement", "Source", "Compliance", "Risks", "Status"], (a.traceability_matrix || []).map(function (r) {
+        var cur = item("requirement", r.requirement_id);
+        return { key: r.requirement_id, label: r.requirement_id, detail: kv([
+            ["Requirement", esc(r.requirement)], ["Quote", r.source && r.source.statement ? quote(r.source.statement) : ""],
+            ["User stories", ids(r.user_stories_ids)], ["Use cases", ids(r.use_cases_ids)], ["Process workflows", ids(r.process_workflows_ids)],
+            ["Data", ids(r.data_requirements_ids)], ["Interfaces", ids(r.interface_requirements_ids)], ["Workflow items", list(r.workflow_items)]]),
+          cells: ['<span class="id">' + esc(r.requirement_id) + "</span>", esc(r.source ? r.source.stakeholder : "-"),
+                  esc((r.compliance_sources || []).map(function (c) { return c.source + " (" + String(c.status || "").replace(/_/g, " ") + ")"; }).join(", ") || "-"),
+                  ids(r.risk_ids), statusBadge(cur ? cur.status : r.approval_status)] };
+      }), "None generated.");
     } else if (t === "controls") {
-      h += '<p class="small muted">Not a legal determination. Built from the compliance mapping; the knowledge base is paraphrased principles, not law text.</p>' +
-        table(["Requirement", "Regulation", "Scope", "Required control", "Status", "Gap", "Evidence", "Checkpoints / retention", "Confidence"], (a.compliance_control_matrix || []).map(function (c) {
-          return ['<span class="id">' + esc(c.requirement_id) + "</span>", esc(c.regulation) + '<div class="small muted">' + esc(c.jurisdiction) + " &middot; v" + esc(c.version) + "</div>",
-            esc(c.scope), esc(c.required_control || "-"), statusBadge(c.status), esc(c.compliance_gap || "-"),
-            c.evidence ? '<div class="quote">&ldquo;' + esc(c.evidence) + '&rdquo;<span class="src">' + (c.evidence_verified ? "verified" : "not verified") + "</span></div>" : "-",
-            list((c.checkpoints || []).concat(c.retention_and_reporting || [])), level(c.confidence) + (c.needs_human_review ? '<div class="flag">needs review</div>' : "")];
-        }));
+      h += xtable("ctrl", ["Requirement", "Regulation", "Status", "Confidence"], (a.compliance_control_matrix || []).map(function (c, i) {
+        return { key: c.requirement_id + "/" + (c.source || i), label: c.requirement_id, detail: kv([
+            ["Scope", esc(c.scope)], ["Jurisdiction", esc(c.jurisdiction) + ", KB entry version " + esc(c.version)], ["Required control", esc(c.required_control || "")],
+            ["Gap", esc(c.compliance_gap || "")], ["Evidence", c.evidence ? quote(c.evidence, c.evidence_verified ? "Verified" : "Not verified") : ""],
+            ["Checkpoints and retention", list((c.checkpoints || []).concat(c.retention_and_reporting || []))],
+            ["Review", c.needs_human_review ? badge("Needs review", true) : ""]]),
+          cells: ['<span class="id">' + esc(c.requirement_id) + "</span>", esc(c.regulation), statusBadge(c.status), level(c.confidence, "Low")] };
+      }), "None generated.");
     } else if (t === "assumptions") {
       var ar = a.assumptions_register || {};
-      h += "<h3>Assumptions</h3>" + table(["ID", "Assumption", "Scope", "Requirements"], (ar.assumptions || []).map(function (x) {
-        return ['<span class="id">' + esc(x.id) + "</span>", esc(x.text), esc(x.scope), ids(x.requirement_ids)];
+      h += '<h3 class="section-title">Assumptions</h3>' + table(["ID", "Assumption", "Scope", "Requirements"], (ar.assumptions || []).map(function (x) {
+        return ['<span class="id">' + esc(x.id) + "</span>", esc(x.text), esc(cap(x.scope)), ids(x.requirement_ids)];
       }));
-      h += '<h3 style="margin-top:18px">Dependencies</h3>' + table(["Requirement", "Depends on"], (ar.dependencies || []).map(function (d) {
+      h += '<h3 class="section-title">Dependencies</h3>' + table(["Requirement", "Depends on"], (ar.dependencies || []).map(function (d) {
         return ['<span class="id">' + esc(d.requirement_id) + "</span>", ids(d.depends_on)];
       }));
     } else if (t === "issues") {
       h += table(["ID", "Type", "Description", "Requirements", "Origin"], (a.open_issues || []).map(function (x) {
-        return ['<span class="id">' + esc(x.id) + "</span>", '<span class="badge warn">' + esc(x.type) + "</span>", esc(x.description), ids(x.requirement_ids), esc(x.origin)];
+        return ['<span class="id">' + esc(x.id) + "</span>", badge(cap(x.type), true), esc(x.description), ids(x.requirement_ids), esc(cap(x.origin))];
       }));
     }
     return h;
@@ -649,52 +754,57 @@
   // ---------------------------------------------------------------- view: approvals
   function viewApprovals() {
     if (!S.result) return needResult("run to approve");
+    var h = intro("Approvals", "The review status of every item and the requirement baseline. Freeze the baseline once every mandatory item is approved.");
     if (S.sample) {
-      return '<div class="card"><h2>Approvals and baseline</h2><p>This is the recorded sample. It has no stored run on this server, so there is nothing to accept, freeze or audit.</p>' +
-        '<p class="muted small">Run a live analysis to review requirements (business analyst or product owner; high-risk security requirements: security officer), compliance interpretations ' +
-        "(compliance officer) and the SDLC selection (project manager, architect, security officer and compliance officer), then freeze the baseline (product owner or business analyst).</p></div>";
+      return h + '<div class="card"><p>This is the recorded sample. It has no stored run on this server, so there is nothing to accept, freeze or audit.</p>' +
+        '<p class="muted">On a live run: requirements are reviewed by a business analyst or product owner (high-risk security requirements by the security officer), compliance interpretations ' +
+        "by the compliance officer, and the SDLC selection by the project manager, architect, security officer and compliance officer together. The product owner or business analyst then freezes the baseline.</p></div>";
     }
-    if (!S.run) return '<div class="card"><p>The run summary could not be loaded.</p><button type="button" class="btn" data-action="refresh-run">Try again</button></div>';
+    if (!S.run) return h + '<div class="card"><p>The run summary could not be loaded.</p><button type="button" class="btn" data-action="refresh-run">Try again</button></div>';
     var b = S.run.baseline, frozen = b.status === "frozen";
-    var h = '<div class="card"><div class="card-head"><h2>Requirement baseline</h2>' + statusBadge(b.status) + "</div>" +
+    h += '<div class="card"><div class="card-head"><h3>Requirement baseline</h3>' + statusBadge(b.status) + "</div>" +
       (frozen ? "<p>Frozen " + esc(b.frozen_at) + " by " + esc(b.frozen_by) + ". Any later change to an item reopens it.</p>"
-        : "<p>The baseline can be frozen once every mandatory item (each requirement and each domain-specific compliance mapping) is approved. The SDLC selection is approved separately and does not block it.</p>") +
+        : "<p>Every requirement and every domain-specific compliance mapping must be approved first. The SDLC selection is approved separately and does not block the baseline.</p>") +
       '<div class="btn-row"><button type="button" class="btn btn-primary" data-action="freeze"' + (frozen ? " disabled" : "") + ">Freeze baseline</button>" +
-      '<button type="button" class="btn btn-ghost" data-action="refresh-run">Refresh</button><span class="small muted">Freezing needs the product owner or business analyst role.</span></div></div>';
-    h += '<div class="card"><h3>Blocking items (' + S.run.blockers.length + ")</h3>" + (S.run.blockers.length ? table(["Type", "Item", "Version", "Status"], S.run.blockers.map(function (x) {
-      return [esc(x.item_type), '<span class="id">' + esc(x.item_id) + "</span>", "v" + esc(x.version), statusBadge(x.status)];
-    })) : '<p class="muted">Nothing is blocking the baseline.</p>') + "</div>";
-    h += '<div class="card"><h3>All approval items</h3>' + table(["Type", "Item", "Version", "Status", "Mandatory", "Regenerations left", "History"], S.run.items.map(function (x) {
-      return [esc(x.item_type), '<span class="id">' + esc(x.item_id) + "</span>", "v" + esc(x.version), statusBadge(x.status) + (x.item_type === "sdlc" && x.accepted_by ? '<div class="small muted">accepted by ' + esc(x.accepted_by.join(", ") || "nobody yet") + "</div>" : ""),
-        x.mandatory ? "yes" : "no", esc(x.regenerations_left), esc(x.history.map(function (v) { return "v" + v.version + " " + v.status; }).join(", "))];
-    })) + "</div>";
-    h += '<div class="card"><h3>Decision history</h3>' + table(["When", "Role", "Action", "Item", "Version", "Comment"], (S.run.decisions || []).map(function (d) {
-      return [esc(d.created_at), esc(d.role), esc(d.action), esc(d.item_type + " " + d.item_id), esc(d.version), esc(d.action === "freeze" ? "(snapshot of item versions)" : d.comment || "")];
-    })) + "</div>";
+      '<button type="button" class="btn btn-ghost" data-action="refresh-run">Refresh</button><span class="muted">Needs the product owner or business analyst role.</span></div></div>';
+    h += '<h3 class="section-title">Blocking items (' + S.run.blockers.length + ")</h3>" + (S.run.blockers.length ? table(["Type", "Item", "Version", "Status"], S.run.blockers.map(function (x) {
+      return [esc(cap(x.item_type)), '<span class="id">' + esc(x.item_id) + "</span>", "v" + esc(x.version), statusBadge(x.status)];
+    })) : '<p class="muted">Nothing is blocking the baseline.</p>');
+    h += '<h3 class="section-title">All approval items</h3>' + xtable("items", ["Type", "Item", "Version", "Status", "Mandatory"], S.run.items.map(function (x) {
+      return { key: x.item_type + ":" + x.item_id, label: x.item_id, detail: kv([
+          ["History", esc(x.history.map(function (v) { return "v" + v.version + " " + v.status; }).join(", "))],
+          ["Regenerations left", esc(x.regenerations_left)],
+          ["Accepted by", x.item_type === "sdlc" && x.accepted_by ? esc(x.accepted_by.join(", ") || "nobody yet") : ""]]),
+        cells: [esc(cap(x.item_type)), '<span class="id">' + esc(x.item_id) + "</span>", "v" + esc(x.version), statusBadge(x.status), x.mandatory ? "Yes" : "No"] };
+    }));
+    h += '<h3 class="section-title">Decision history</h3>' + table(["When", "Role", "Action", "Item", "Version", "Comment"], (S.run.decisions || []).map(function (d) {
+      return [esc(d.created_at), esc(cap(d.role)), esc(cap(d.action)), esc(d.item_type + " " + d.item_id), esc(d.version), esc(d.action === "freeze" ? "(snapshot of item versions)" : d.comment || "")];
+    }), "No decisions yet.");
     return h;
   }
 
   // ---------------------------------------------------------------- view: audit
   function viewAudit() {
     var f = S.auditFilters;
-    var h = '<div class="card"><div class="card-head"><h2>Audit log</h2><span class="small muted">Read-only; append-only and hash-chained. Viewing it is itself logged.</span></div>' +
-      '<form id="auditForm" class="btn-row" style="align-items:flex-end"><div class="field"><label for="fRun">Run id</label><input type="text" id="fRun" value="' + esc(f.run_id) + '" placeholder="any"></div>' +
-      '<div class="field"><label for="fRole">Role</label><select id="fRole"><option value="">any</option>' + ROLES.concat(["unspecified", "system"]).map(function (r) {
-        return "<option" + (f.role === r ? " selected" : "") + ">" + esc(r) + "</option>";
-      }).join("") + '</select></div><div class="field"><label for="fAction">Action</label><input type="text" id="fAction" value="' + esc(f.action) + '" placeholder="e.g. approval_accept"></div>' +
+    var h = intro("Audit log", "Every stage, review and download in an append-only, hash-chained log. Viewing it is itself logged.");
+    h += '<div class="card"><form id="auditForm" class="filters"><div class="field"><label for="fRun">Run id</label><input type="text" id="fRun" value="' + esc(f.run_id) + '" placeholder="Any"></div>' +
+      '<div class="field"><label for="fRole">Role</label><select id="fRole"><option value="">Any</option>' + ROLES.concat(["unspecified", "system"]).map(function (r) {
+        return '<option value="' + esc(r) + '"' + (f.role === r ? " selected" : "") + ">" + esc(cap(r)) + "</option>";
+      }).join("") + '</select></div><div class="field"><label for="fAction">Action</label><input type="text" id="fAction" value="' + esc(f.action) + '" placeholder="For example approval_accept"></div>' +
       '<div class="field"><label for="fLimit">Limit</label><input type="text" id="fLimit" value="' + esc(f.limit) + '" size="5" inputmode="numeric"></div>' +
       '<div class="field"><button type="submit" class="btn btn-primary">Load events</button></div>' +
       (S.result && S.result.run_id && !S.sample ? '<div class="field"><button type="button" class="btn btn-ghost" data-action="audit-this-run">This run only</button></div>' : "") + "</form></div>";
     if (!S.audit) return h + '<p class="muted">Load events to see the log and the chain check.</p>';
     var c = S.audit.chain;
-    h += '<div class="banner ' + (c.ok ? "" : "error") + '" style="margin-bottom:14px"><div>' + (c.ok ? "<strong>Hash chain verified:</strong> all " + esc(c.checked) + " events in the log match their hashes."
+    h += '<div class="banner ' + (c.ok ? "" : "error") + '"><div>' + (c.ok ? "<strong>Hash chain verified:</strong> " + (c.checked === 1 ? "the only event in the log matches its hash." : "all " + esc(c.checked) + " events in the log match their hashes.")
       : "<strong>Hash chain broken</strong> at event " + esc(c.first_bad_seq) + " after " + esc(c.checked) + " good events: " + esc(c.reason)) + "</div></div>";
-    h += table(["Seq", "Time", "Run", "Role", "Action", "Stage", "Model", "Versions", "Details"], S.audit.events.map(function (e) {
+    h += xtable("audit", ["Seq", "Time", "Role", "Action", "Stage"], S.audit.events.map(function (e) {
       var d = JSON.stringify(e.details, null, 2);
-      return [esc(e.seq), esc(e.ts), "<code>" + esc(e.run_id || "-") + "</code>", esc(e.role), "<strong>" + esc(e.action) + "</strong>", esc(e.stage || "-"), esc(e.model || "-"),
-        '<span class="small">' + esc(e.app_version) + " / " + esc(e.kb_version) + "</span>",
-        '<details><summary class="small">' + esc(d.length) + ' chars</summary><pre class="mono" style="white-space:pre-wrap;max-width:520px;max-height:300px;overflow:auto">' + esc(d.slice(0, 6000)) + (d.length > 6000 ? "\n..." : "") + "</pre></details>"];
-    }));
+      return { key: String(e.seq), label: "event " + e.seq, detail: kv([
+          ["Run", "<code>" + esc(e.run_id || "-") + "</code>"], ["Model", esc(e.model || "-")], ["Versions", esc(e.app_version + " / " + e.kb_version)],
+          ["Details", '<pre class="mono">' + esc(d.slice(0, 6000)) + (d.length > 6000 ? "\n..." : "") + "</pre>"]]),
+        cells: [esc(e.seq), esc(e.ts), esc(cap(e.role)), "<code>" + esc(e.action) + "</code>", esc(e.stage || "-")] };
+    }), "No events match these filters.");
     return h;
   }
 
@@ -719,7 +829,8 @@
       S.banners = S.banners.filter(function (b) { return b.key !== "sample"; });
       maskingBanner(data.masking);
       history.replaceState(null, "", "#run=" + encodeURIComponent(data.run_id));
-      return loadRun().then(function () { S.tab = "requirements"; });
+      S.open = {};
+      return loadRun().then(function () { S.tab = "overview"; });
     }).catch(function (e) { showError(e, "pipeline"); }).then(function () {
       clearInterval(S.timer); S.lastElapsed = Date.now() - S.startedAt; S.running = false; render();
     });
@@ -739,7 +850,8 @@
         S.run = out[1]; S.sample = false; S.audit = null;
         S.input.scenario = S.result.scenario || ""; S.input.documents = [];
         S.input.answers = (S.result.answers || []).map(function (a) { return { role: a.role, question: a.question, answer: a.answer, question_id: a.question_id, topic: a.topic }; });
-        if (S.tab === "scenario") S.tab = "requirements";
+        S.open = {};
+        if (S.tab === "scenario") S.tab = "overview";
         render();
       }).catch(function (e) { showError(e, "opening stored run " + id); history.replaceState(null, "", location.pathname); });
   }
@@ -767,7 +879,7 @@
       clearBanners("error");
       addBanner("warn", "<strong>" + esc((data._sample && data._sample.label) || "Recorded sample, not a live run") + ".</strong> " + esc((data._sample && data._sample.note) || ""), "sample");
       maskingBanner(data.masking);
-      S.tab = "sdlc"; render(); window.scrollTo(0, 0);
+      S.open = {}; S.tab = "overview"; render(); window.scrollTo(0, 0);
     }).catch(function (e) { showError(e, "loading the recorded sample"); });
   }
   function confirmReplace() { return window.confirm("Replace the current results? They stay stored on the server (if live) but leave this page."); }
@@ -776,7 +888,7 @@
     if ((S.result || S.input.scenario) && !window.confirm("Start a new analysis? This clears the scenario and results on this page.")) return;
     S.result = null; S.run = null; S.sample = false; S.audit = null; S.followUps = null; S.lastElapsed = null;
     S.input = { scenario: "", answers: [], documents: [], artefacts: true };
-    S.banners = []; S.tab = "scenario"; render();
+    S.banners = []; S.open = {}; S.tab = "scenario"; render();
     history.replaceState(null, "", location.pathname);
     var t = $("scenarioText"); if (t) t.focus();
   }
@@ -941,6 +1053,14 @@
     var a = b.getAttribute("data-action");
     if (a === "tab") { S.tab = b.getAttribute("data-tab"); render(); window.scrollTo(0, 0); $("panel").focus({ preventScroll: true }); }
     else if (a === "art-tab") { S.artTab = b.getAttribute("data-tab"); renderPanel(); }
+    else if (a === "toggle-row") {
+      var key = b.getAttribute("data-key"), row = $(b.getAttribute("data-target"));
+      S.open[key] = !S.open[key];
+      if (row) row.hidden = !S.open[key];
+      b.setAttribute("aria-expanded", String(S.open[key]));
+      b.closest("tr").classList.toggle("is-open", S.open[key]);
+    }
+    else if (a === "new-analysis") newAnalysis();
     else if (a === "dismiss") { var id = b.getAttribute("data-id"); S.banners = S.banners.filter(function (x) { return x.id !== id; }); renderBanners(); }
     else if (a === "run") runPipeline();
     else if (a === "load-sample") loadSample();
@@ -988,7 +1108,7 @@
   // Arrow keys move between tabs (WAI-ARIA tabs pattern).
   $("tabs").addEventListener("keydown", function (ev) {
     if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
-    var t = tabsFor(), i = t.map(function (x) { return x.id; }).indexOf(S.tab);
+    var t = tabsFor().filter(function (x) { return enabled(x.id); }), i = t.map(function (x) { return x.id; }).indexOf(S.tab);
     i = (i + (ev.key === "ArrowRight" ? 1 : t.length - 1)) % t.length;
     S.tab = t[i].id; render(); $("tab-" + S.tab).focus();
   });
