@@ -1,176 +1,191 @@
 # Requora AI
 
-AI-powered requirements engineering: describe a software scenario, and Requora AI generates structured requirements, analyses compliance and risk against a curated knowledge base (RAG), and recommends an SDLC model with an explainable, deterministic scoring trail.
+An agentic AI assistant that turns a plain-language project scenario from a bank or other financial institution into a reviewed requirements package: requirements, regulation mapping, risks, an SDLC recommendation, a development workflow and a draft SRS. Every result is a proposal. People approve it.
 
-Built by Darshan - NIT Karnataka, Surathkal (CS305 Software Engineering course project).
+Built for the Software Engineering course (NIT Karnataka, Surathkal) by Darshan.
 
-**Problem statement:** Gathering software requirements and choosing the right SDLC model is manual and subjective, and it often ignores regulatory and risk constraints. Requora AI automates this: it generates structured requirements from a plain-language scenario, checks them against a compliance knowledge base using RAG, and recommends an SDLC model through deterministic, explainable scoring.
+![Component diagram](docs/diagrams/component_diagram.png)
 
-## How it works
+## The idea in one rule
+
+**The language model reads and writes. Plain code decides.**
+
+The model extracts requirements, rates project traits and drafts text. It never chooses the SDLC model, sets a score, assigns an ID, grades a confidence level or approves anything. Those steps are ordinary Python that can be tested and explained.
+
+## What you get from one run
+
+| Output | How it is produced |
+|---|---|
+| Functional and non-functional requirements | LLM proposes; code checks that each one quotes your text word for word |
+| Quality flags: vague wording, missing numbers, duplicates, conflicts | Code rules plus one LLM conflict check |
+| Regulation mapping with evidence and confidence | Retrieval from a small knowledge base; code grades confidence and filters by domain |
+| Risk register (5 to 8 risks) | LLM rates likelihood and impact from written rubrics; code scores and ranks |
+| SDLC recommendation among 7 models, with a close-call flag | LLM rates 15 traits; code scores against fixed model profiles |
+| Development workflow | Fixed template per model; the LLM can only add items linked to real requirements |
+| User stories, use cases, process workflows, data and interface requirements | LLM drafts; code assigns IDs and links sources |
+| Traceability matrix, compliance-control matrix, assumptions, open issues | Built by code |
+| 17-section SRS (Markdown and printable HTML) | Built by code |
+| Approvals, baseline freeze, tamper-evident audit log | Code |
+
+## How a run works
+
+| Step | Stage | Model used |
+|---|---|---|
+| 1 | Requirements | Gemini text |
+| 2 | Compliance (after one embedding call for retrieval) | Gemini text |
+| 3 | Conflict check | Gemini text |
+| 4 | Risk register | Gemini text |
+| 5 | SDLC trait ratings | Gemini text |
+| 6 | SDLC explanation | Gemini text |
+| 7 | Workflow additions | Gemini text |
+| 8 | Artefacts | Gemini text |
+
+That is 8 LLM calls and 1 embedding call per run. The default text model is `gemini-3.5-flash-lite` with fallbacks; embeddings use `gemini-embedding-001`. Every reply is validated against a schema and retried once with the reason before the run fails.
+
+![Pipeline sequence](docs/diagrams/sequence_diagram.png)
+
+See [docs/CODE_MAP.md](docs/CODE_MAP.md) for the file and function behind every step.
+
+## Quick start (Windows)
+
+You need Python 3.12 and a Gemini API key.
 
 ```
-(optional) Interview -> Scenario + answers -> Agent 1: Requirement records -> Agent 3: Compliance & Risk (RAG)
-                                                                   -> Quality check -> Agent 2: SDLC recommendation
-```
-
-0. **Interview (optional):** role-specific question templates for the 9 stakeholder roles in the problem statement, and an endpoint that returns the next follow-up questions from the answers collected so far.
-1. **Agent 1 (requirements):** functional and non-functional requirement records with the problem statement's fields: categories, source stakeholder, the exact source text, business justification, priority, dependencies, assumptions, acceptance criteria, risk level, confidence (computed) and approval status (`proposed`).
-2. **Agent 3 (compliance and risk):** runs one retrieval query per requirement against the knowledge base in `knowledge_base/` (ChromaDB + Gemini embeddings) and passes only chunks under a tuned distance threshold to the LLM. Whether the knowledge base covers the domain (`kb_relevance`) is computed from those distances using domain-specific sources only; the domain-agnostic security baseline can still be cited, labelled "generic baseline", but never counts as coverage. Any citation of a source that was not retrieved is dropped, so the panel can only cite what was actually retrieved.
-3. **Agent 2 (SDLC):** the LLM rates 15 project traits (covering the problem statement's 13 decision factors) against fixed rubrics and must cite evidence; a deterministic engine ranks Waterfall, V-Model, Incremental, Agile, Spiral, DevSecOps and the Agile-V hybrid with percentage scores; the LLM then explains the result. The LLM never picks the model, and the choice is marked as needing approval by the project manager, architect, security team and compliance officer.
-4. **Workflow (pipeline):** the recommended model's base phases (plain data, with activities, roles, deliverables, security activities, testing, compliance checkpoints, approval gates, entry/exit criteria and traceability) plus scenario-specific items one LLM call may add, linked to requirement IDs.
-5. **Artefacts and SRS (pipeline):** user stories with acceptance criteria, use cases, process workflows, data and interface requirements (one LLM call), plus a traceability matrix, compliance-control matrix, assumptions and dependency register and open-issues list built by code. Everything is assembled into one SRS you can download as Markdown or open as a print-friendly HTML page (Print -> Save as PDF).
-
-**Compliance mapping and risk register (pipeline):** each requirement is mapped to the knowledge-base sources that apply to the scenario's domain, with jurisdiction, version, required control, verified evidence, satisfied/gap, graded confidence and a human-review flag; a threat and risk register scores likelihood x impact in code.
-
-**Quality check (API and pipeline):** flags ambiguity, untestable wording and near-duplicates by deterministic rules, and conflicts between requirements with one LLM call; each flag has requirement IDs, a reason and a suggested fix.
-
-Every LLM reply is checked against a schema (`app/schemas.py`): allowed values, known requirement IDs, real knowledge-base sources, all nine traits as integers 1-5. An invalid reply is retried once with the errors, then the API returns a 502 rather than guessing.
-
-**Input protection:** sensitive values (emails, phones, card numbers, Aadhaar/PAN-style ids, IBANs, account and SSN-style numbers) are replaced with placeholders such as `[EMAIL_1]` before any model call or storage, user text is fenced off as data in every prompt, and obvious injection attempts ("ignore previous instructions", "reveal your system prompt" ...) are rejected with 400. You can attach `.txt`, `.md` or `.csv` documents as JSON (`documents: [{"filename", "text"}]`, up to 20,000 characters each).
-
-**Approvals and audit (UI and API):** each pipeline run is stored in `data/app.db` with its requirements, regulatory interpretations and SDLC selection as approval items. Send your role in an `X-Role` header (business analyst, product owner, security officer, compliance officer, project manager, architect, auditor) to accept, reject, modify or regenerate items (`POST /runs/<run_id>/approvals`) and to freeze the baseline (`POST /runs/<run_id>/baseline/freeze`). Every stage, action and artefact goes into a tamper-evident audit log the auditor and compliance officer can read at `GET /audit`. The role header is a stand-in for real sign-in; set `REQUIRE_ROLE=1` to reject requests without it. `RETENTION_DAYS` with `python -m app.retention` deletes old runs (audit history is kept). `/agents/pipeline?artefacts=false` skips the artefact LLM call.
-
-Download the SRS of a pipeline run from the links in its `srs` key, e.g. `GET /agents/srs/<id>?format=html`, or `POST /agents/srs?format=markdown` with a saved pipeline result.
-
-Details, the class diagram and the full scoring tables are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
-
-## Setup (once)
-
-Windows PowerShell, from the project folder:
-
-```powershell
+git clone https://github.com/darshan-gittygit/se-project.git
+cd se-project
 python -m venv venv
-venv\Scripts\Activate.ps1
+venv\Scripts\activate
 pip install -r requirements.txt
-
 copy .env.example .env
-# open .env and put your real Gemini key after GEMINI_API_KEY=
-
-python -m app.rag.ingest      # builds chroma_db/ from knowledge_base/ (needs internet + key)
 ```
 
-Get a free key at <https://aistudio.google.com/app/apikey>.
+Open `.env` and add your Gemini API key (the variable names are listed in `.env.example`). Then start the app:
 
-## Run
-
-```powershell
-python -m uvicorn app.main:app --reload --port 8001
+```
+python -m uvicorn app.main:app --port 8001
 ```
 
-or double-click `run.bat`. Then open <http://127.0.0.1:8001/>. API docs are at `/docs`.
+Open http://127.0.0.1:8001 in your browser. Run `venv\Scripts\activate` in every new terminal.
 
-Before a demo, `python -m scripts.preflight` checks `.env`, the knowledge base (31 chunks), `data/app.db` and its audit chain, the static files and port 8001, with one PASS/FAIL line each and no model calls. Add `--run <run_id>` to check a stored run, and `--ping-model` / `--ping-embed` for one live call each.
+If the `chroma_db` folder is missing, build the knowledge base once with `python -m app.rag.ingest`.
 
-## Using the web UI
+### Settings in `.env`
 
-Plain HTML, CSS and JavaScript in `app/static/` (no framework, no build step; charts are inline SVG drawn by `charts.js`).
+| Setting | Meaning |
+|---|---|
+| Gemini API key | Required for live runs |
+| `GEMINI_MODEL` | Preferred text model; fallbacks are tried when it is overloaded or out of quota |
+| `REQUIRE_ROLE` | Set to `1` to require a role on every request (off by default) |
+| `RETENTION_DAYS` | Age after which `python -m app.retention` deletes old runs |
 
-- **Top bar:** pick your role; it is sent as the `X-Role` header on every request and decides which review actions the server accepts. "New analysis" clears the page.
-- **Scenario:** type the scenario, optionally answer role-specific template questions or ask for model follow-up questions, and attach `.txt`/`.md`/`.csv` files (read in the browser, sent as JSON). "Run full analysis" makes one `/agents/pipeline` request; the page shows the elapsed time while it runs (the server reports no per-stage progress, so none is shown). A banner reports how many sensitive values were masked (counts only).
-- **Requirements, Compliance and risk, SDLC, Artefacts:** every field the API returns: requirement records with quotes and quality flags, the compliance mapping (with the "Not a legal determination" notice and a "generic baseline" / "domain-specific" label), retrieved chunks, the risk register with a likelihood x impact grid, the SDLC result (radar of the 15 traits against the winner's profile, trait-by-model heat matrix, ranked bars, close-call banner, why-not text, workflow table, four approvers), and all artefacts with "Download SRS (Markdown)" and "Open printable SRS".
-- **Approvals:** accept / reject / modify / regenerate buttons on each item, blocking items, decision history and "Freeze baseline". 403 and 409 answers are shown as plain messages.
-- **Audit log** (auditor and compliance officer): filter by run, role and action; shows whether the hash chain verifies.
-- **Reloading** keeps a live run: its id is in the address (`#run=<id>`) and is reopened from the database.
-- **Load recorded sample:** shows `app/static/sample_run.json`, labelled "Recorded sample, not a live run", with no model calls (useful when the quota is used up). It is a recorded live loan run (gemini-3.5-flash-lite), built with `python -m scripts.make_sample_run --from-live <saved response.json>`, which refuses unmasked personal data or key-like text. Approvals are disabled in sample mode because nothing is stored.
+## Using the app
 
-## Tests
+1. Paste a scenario, or load the recorded sample (no model call, no quota).
+2. Click Run analysis. A run takes roughly 30 to 90 seconds.
+3. Start on the Overview tab, then open Requirements, Compliance and risk, SDLC, Artefacts and Approvals.
+4. Choose a role in the top bar and accept or reject items. Download the SRS from Artefacts.
+5. Every run has a permanent link of the form `#run=<id>`.
 
-The tests run offline (Gemini and retrieval are mocked), so they need no key or internet:
+## Roles and approvals
 
-```powershell
-pip install -r requirements-dev.txt
-python -m pytest -q
-```
+| Role | Can |
+|---|---|
+| Business analyst, product owner | Review requirements, freeze the baseline |
+| Security officer | Review high-risk security requirements; approve the SDLC choice |
+| Compliance officer | Approve regulatory interpretations; approve the SDLC choice; view the audit log |
+| Project manager, architect | Approve the SDLC choice |
+| Auditor | Read-only; view the audit log |
 
-They cover the scoring engine (including that no model gets a per-model bonus), retrieval filtering and `kb_relevance`, schema validation and retries, the Gemini fallback and rate-limit logic, the analysis scripts, every API route, and the UI's static files (the recorded sample's keys and that it holds no secrets, JS constants matching the backend, `node --check` when Node.js is installed).
+The SDLC choice becomes approved only when the project manager, architect, security officer and compliance officer all accept the same version. The baseline can be frozen only when every requirement and every domain-specific compliance mapping is approved. The role menu is a stand-in for real login.
 
-## Evaluation (problem statement section 19)
+![Use case diagram](docs/diagrams/usecase_diagram.png)
 
-Six case studies in `eval/cases/` (digital banking, loan processing, payment systems, fraud detection, insurance, regulatory reporting), each a 230-270 word scenario in stakeholder voice with planted vague phrases and conflicts, and a hand-written gold section (expected requirements with keyword groups, expected knowledge-base sources, the planted problems, the expected SDLC with acceptable alternatives). Every gold field has a `status`: `DRAFT` until reviewed, then `FROZEN`. The runner refuses DRAFT gold.
+## Safety and privacy
 
-```powershell
-python -m scripts.run_eval --check                 # gold status + self-check of every case (no model calls)
-python -m scripts.run_eval --cases loan_processing # live: one /agents/pipeline call per case -> eval/results/<date>/
-python -m scripts.run_eval --resume                # continue after a stop (rate limits stop the run cleanly)
-python -m scripts.evaluate eval/results/<date> --db data/app.db   # metric table per case
-python -m scripts.eval_report --write --db data/app.db            # writes docs/EVALUATION.md
-```
+| Control | Where |
+|---|---|
+| Masking of emails, cards, IBANs, Aadhaar and PAN style numbers, phones before any model call or storage | `app/masking.py`, `app/input_guard.py` |
+| Prompt fencing, injection filter, output check for keys and unmasked data | `app/prompt_safety.py` |
+| Quotes must appear verbatim in the input; evidence must appear in the retrieved text | `app/schemas.py`, `app/agents/compliance_mapping.py` |
+| Retrieval limited to allowed knowledge-base sources for the scenario's domain | `knowledge_base/sources.json` |
+| Roles and permissions | `app/roles.py` |
+| Hash-chained audit log; database blocks edits and deletes | `app/audit.py`, `app/db.py` |
+| Retention policy | `app/retention.py` |
+| Versions of model, knowledge base and app stored with every run | `app/runs.py` |
 
-Live runs are stored in `data/app.db` like UI runs, so you can open one in the UI (`http://127.0.0.1:8001/#run=<run_id>`) and review it; those decisions give the human correction rate. `--offline` runs the harness on mocked replies (for testing only; its numbers mean nothing). The manual baseline goes in `eval/manual_baseline/<case>.md` (copy `TEMPLATE.md`), satisfaction answers in `eval/satisfaction/*.csv` (form: `eval/satisfaction_form.md`). Metric definitions and limitations are in `docs/EVALUATION.md`.
+All compliance output carries a notice: it maps requirements to a small, paraphrased knowledge base and is not a legal determination.
 
-Analysis scripts (not part of the test run):
-
-```powershell
-python -m scripts.sensitivity --write              # offline: win share + sensitivity -> docs/SCORING_ANALYSIS.md
-python -m scripts.tune_relevance_threshold --write # live: re-tunes the RAG threshold -> docs/RAG_TUNING.md
-```
-
-## Project layout
+## Project structure
 
 ```
 app/
-  main.py                    FastAPI routes and static UI
-  config.py                  .env loading and project paths
-  gemini_client.py           Gemini calls: backoff on 429, retry on 503, fallback across models
-  json_utils.py              tolerant JSON parsing of LLM output
-  schemas.py                 Pydantic schemas for every LLM reply + validate/retry helper
-  vocabulary.py              roles, topics, categories and statuses quoted from the problem statement
-  agents/
-    requirement_agent.py     Agent 1
-    interview_agent.py       interview follow-up questions (+ interview_templates.py)
-    quality_agent.py         quality and conflict checks
-    compliance_mapping.py    per-requirement compliance mapping, confidence, review flags
-    risk_agent.py            threat and risk register
-    sdlc_workflows.py        base SDLC workflow phases per model (plain data)
-    workflow_agent.py        project-specific workflow additions
-    artefact_agent.py        user stories, use cases, process workflows, data and interface requirements
-  artefacts.py               traceability matrix, compliance-control matrix, registers, open issues (no LLM)
-  srs.py                     SRS as Markdown and print-friendly HTML
-  db.py, runs.py             SQLite storage: runs, approval items, decisions, audit events
-  roles.py                   roles (X-Role header) and the permission table
-  approvals.py               accept / reject / modify / regenerate, versions, baseline freeze
-  audit.py                   append-only, hash-chained audit log and its verifier
-  masking.py                 sensitive-data detection and placeholders
-  prompt_safety.py           prompt delimiters, injection filter, output checks
-  input_guard.py             per-request masking + filtering, document upload checks
-  retention.py               purge old runs (python -m app.retention)
-    compliance_agent.py      Agent 3 (RAG)
-    sdlc_agent.py            Agent 2 (trait extraction + justification)
-    sdlc_rules.py            deterministic SDLC scoring engine
-  rag/                       embeddings, ingest, retriever
-  static/                    index.html, style.css, app.js (the UI), charts.js (SVG charts), sample_run.json
-knowledge_base/              curated compliance source documents (*.txt) + sources.json metadata
-chroma_db/                   generated vector store (rebuild with the ingest command)
-data/app.db                  local database (created on startup, gitignored)
-tests/                       offline test suite
-scripts/                     threshold tuning (live), win-share and sensitivity analysis (offline), make_sample_run.py, preflight.py,
-                             run_eval.py, evaluate.py, eval_human.py, eval_report.py (evaluation harness)
-eval/                        case studies (cases/), results/, manual_baseline/, satisfaction form and answers
-docs/ARCHITECTURE.md         design notes, diagrams, scoring tables
-docs/RAG_TUNING.md           relevance threshold tuning results
-docs/SCORING_ANALYSIS.md     win share and sensitivity of the SDLC scoring
-docs/EVALUATION_BASELINE.md  evaluation of the project before the critical fixes
-docs/COVERAGE.md             problem-statement coverage plan: deliverable, phase and status per section
-docs/EVALUATION.md           section-19 evaluation report (generated by scripts/eval_report.py)
+  main.py               FastAPI routes and the pipeline
+  gemini_client.py      the only place that calls Gemini text
+  schemas.py            validation, quote checks, confidence
+  agents/               requirement, interview, quality, compliance, risk, sdlc, workflow, artefact
+  rag/                  embeddings, retriever, knowledge-base ingest and metadata
+  artefacts.py, srs.py  matrices, registers and the SRS
+  approvals.py, roles.py, runs.py, audit.py, db.py
+  masking.py, prompt_safety.py, input_guard.py
+  static/               the web interface
+knowledge_base/         paraphrased regulation principles and sources.json
+scripts/                preflight, evaluation, tuning and analysis scripts
+eval/                   six case studies and templates
+docs/                   design notes, code map, analysis and diagrams
+tests/                  automated tests
 ```
 
-## Troubleshooting
+## HTTP API
 
-| Symptom | Fix |
+| Endpoint | Purpose |
 |---|---|
-| `Internal Server Error` or an error panel in the UI | Read the terminal traceback - it names the real cause. |
-| `404 NOT_FOUND ... model is no longer available` | Google retired the model name. Put the replacement it names into `GEMINI_MODEL` in `.env`, and add it to `FALLBACK_MODELS` in `app/gemini_client.py`. Restart the server. |
-| `503 UNAVAILABLE` | Google-side demand spike. The client retries the same model up to 4 times (2, 4, 8 s waits) and then falls back; if every model fails, the error lists each attempt, so you can see whether it was demand (503) or quota (429). |
-| `429 RESOURCE_EXHAUSTED` | Free-tier rate limit. The client waits and retries (up to 10 s per wait), then tries the next model; a daily-quota error ("retry in 21h") skips straight to the next model. If every model is exhausted, try again later or use another key. |
-| Check that the key and model work | `python -m app.gemini_client` sends one tiny prompt and prints which model answered. |
-| `Knowledge base not found` | Run `python -m app.rag.ingest`. |
-| UI looks old or a stage is missing | Hard refresh the browser (Ctrl+Shift+R). |
-| Changes do not show up / odd stale behaviour | An old server process may still hold the port. Check with `netstat -ano | findstr :8001`, then `taskkill /PID <pid> /F`, or use another `--port`. |
-| `.env` changes ignored | Restart the server; `--reload` only watches Python files. |
+| `POST /agents/pipeline` | Run the full analysis and store the run |
+| `POST /agents/interview` | Suggest follow-up interview questions |
+| `GET /runs/{id}`, `GET /runs/{id}/result` | Load a stored run |
+| `POST /runs/{id}/approvals` | Accept, reject, modify or regenerate an item |
+| `GET /agents/srs`, `POST /agents/srs` | Download the SRS (Markdown or printable HTML) |
+| `GET /audit` | Audit events, auditor and compliance officer only |
 
-## Honest limitations
+Send the role in the `X-Role` header. Interactive API docs are at `/docs` while the server runs.
 
-- The knowledge base is a small curated set of paraphrased regulatory principles (31 chunks, 6 documents), not verbatim legal text.
-- Trait scores come from an LLM and can vary slightly between runs; everything after that step is deterministic.
-- Free-tier Gemini has rate limits and model names change; the client is built to tolerate this.
-- Never share or submit your `.env` file - it contains your API key. The `.gitignore` already excludes it.
+## Tests and checks
+
+```
+python -m pytest -q                 # automated tests
+python scripts/preflight.py         # quick check before a demo
+python scripts/run_eval.py --check  # validate the evaluation cases
+```
+
+## Evaluation status
+
+| Component | Result |
+|---|---|
+| Regulation retrieval | 42 labelled queries, 122 query and source pairs. At distance threshold 0.62: F0.5 0.909, precision 0.94, recall 0.81; precision of citable results 1.00 |
+| SDLC scoring | Fairness tests, win-share and sensitivity analysis in `docs/SCORING_ANALYSIS.md` |
+| End to end | Six case studies and metric scripts are built; results will be added to `docs/EVALUATION.md` after the live runs |
+
+## Known limits
+
+- The 13 agents of the problem statement are implemented as modules and one orchestrating function, not as separate processes.
+- Roles are selected in a menu. There is no login, multi-factor authentication, or configured encryption at rest.
+- The knowledge base is small and paraphrased.
+- Names and addresses are not masked.
+- The model's trait ratings can vary slightly between runs, so close SDLC results can swap places. The app flags close calls.
+- Confidence reflects how well a requirement is grounded in a quote, not whether details the model added are right.
+
+## Documentation
+
+| File | Content |
+|---|---|
+| [docs/PROBLEM_STATEMENT.md](docs/PROBLEM_STATEMENT.md) | The official statement |
+| [docs/COVERAGE.md](docs/COVERAGE.md) | How each section is covered |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Design |
+| [docs/CODE_MAP.md](docs/CODE_MAP.md) | Files, functions, models and likely viva questions |
+| [docs/RAG_TUNING.md](docs/RAG_TUNING.md) | How the 0.62 threshold was chosen |
+| [docs/SCORING_ANALYSIS.md](docs/SCORING_ANALYSIS.md) | SDLC scoring analysis |
+| docs/diagrams/ | Use case, component, data flow, sequence and activity diagrams |
+
+## Author
+
+B Darshan Sai Naath
+241CS114
