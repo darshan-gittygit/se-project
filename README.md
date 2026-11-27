@@ -2,7 +2,7 @@
 
 An agentic AI assistant that turns a plain-language project scenario from a bank or other financial institution into a reviewed requirements package: requirements, regulation mapping, risks, an SDLC recommendation, a development workflow and a draft SRS. Every result is a proposal. People approve it.
 
-Built for the Software Engineering course (NIT Karnataka, Surathkal) by Darshan.
+Built for the Software Engineering course
 
 ![Component diagram](docs/diagrams/02_component.png)
 
